@@ -5,6 +5,9 @@ to czysto cienka warstwa HTTP wokół tego, co już jest przetestowane w
 material_timdr/*.py i tests/test_pipeline.py.
 
 Endpoints:
+    GET  /                     — wizualny UI (przeglądarka): formularz +
+                                  narysowana sieć atomowa (SVG) + wyniki
+                                  TIMDR/mapping/closeout, patrz static/index.html
     GET  /health              — health check
     GET  /functions           — lista PRIMARY_FUNCTIONS (co można wpisać
                                   jako requirements.primary_function)
@@ -26,11 +29,13 @@ pomiarowych, patrz validate.py i examples/demo_graphene_dopant.py).
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .requirements import RequirementsVector, PRIMARY_FUNCTIONS
@@ -173,6 +178,19 @@ def serialize_result(result: MaterialDesignResult) -> dict:
 # ---------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------
+_STATIC_DIR = Path(__file__).parent / "static"
+
+
+@app.get("/", include_in_schema=False)
+def root() -> FileResponse:
+    # Prawdziwy wizualny UI (formularz + narysowana siec atomowa jako SVG,
+    # nie tylko surowy JSON/Swagger) - to jest to, co ktos otwierajacy
+    # http://127.0.0.1:8000 w przegladarce po uruchomieniu run.bat
+    # faktycznie chce zobaczyc. Swagger nadal dostepny pod /docs (link w
+    # naglowku strony), dla kogos kto chce wywolywac API programowo.
+    return FileResponse(_STATIC_DIR / "index.html")
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}

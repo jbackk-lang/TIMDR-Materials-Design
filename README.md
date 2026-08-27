@@ -50,9 +50,16 @@ print(result.closeout.summary_pl)
 co jest opisane wyżej i przetestowane w `tests/test_pipeline.py`.
 
 **Windows: dwuklik na `run.bat`** - tworzy `.venv`, instaluje zależności,
-startuje serwer na `http://127.0.0.1:8000` (dokumentacja Swagger pod
-`/docs`, generowana automatycznie z modeli Pydantic - nie może się
-rozjechać z kodem). Zatrzymanie: Ctrl+C w oknie konsoli.
+startuje serwer na `http://127.0.0.1:8000`. Otwórz ten adres w
+przeglądarce - `GET /` serwuje **wizualny UI** (`material_timdr/static/index.html`):
+formularz (funkcja materiału, temperatura, rozmiar sieci, domieszka) +
+narysowana sieć atomowa jako SVG (kolor = anomalia/defekt/skręt/rezonans,
+przerywana obwódka = strefa docelowa) + wynik Kroku 5 (test permutacyjny)
+i checklisty Kroku 8, aktualizowane po każdym kliknięciu "Zaprojektuj
+materiał" - bez przeładowania strony. Dokumentacja Swagger dla wywołań
+programowych dostępna osobno pod `/docs` (link w nagłówku UI), generowana
+automatycznie z modeli Pydantic w `api.py`. Zatrzymanie serwera: Ctrl+C w
+oknie konsoli.
 
 Ręcznie (Linux/macOS/Windows z Pythonem w PATH):
 ```bash
@@ -63,6 +70,7 @@ uvicorn material_timdr.api:app --host 127.0.0.1 --port 8000
 Endpointy:
 | Metoda | Ścieżka | Co robi |
 |---|---|---|
+| GET | `/` | wizualny UI (formularz + SVG sieci + wyniki) |
 | GET | `/health` | health check |
 | GET | `/functions` | lista dozwolonych `primary_function` |
 | POST | `/design` | pełny pipeline `design_material()`, zwraca JSON z figurą, siecią, polem, wynikami TIMDR, mapowaniem (Krok 5) i closeoutem (Krok 8) |
@@ -194,7 +202,8 @@ material_timdr/
     closeout.py          — Krok 8: checklist zamknięcia
     pipeline.py          — orkiestrator (design_material())
     api.py               — REST API (FastAPI) nad pipeline.design_material()
-tests/                    — 107 testów pytest (w tym test_real_materials.py: grafen, h-BN, diament, krzem, german; test_api.py: warstwa HTTP)
+    static/index.html     — wizualny UI serwowany pod GET / (formularz + SVG sieci)
+tests/                    — 108 testów pytest (w tym test_real_materials.py: grafen, h-BN, diament, krzem, german; test_api.py: warstwa HTTP + UI)
 examples/
     demo_graphene_dopant.py — pełny przebieg 8 kroków na jednym przykładzie
 run.bat                    — Windows: uruchamia API lokalnie (patrz sekcja "API" wyżej)

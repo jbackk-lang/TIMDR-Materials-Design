@@ -16,6 +16,18 @@ from material_timdr.api import app
 client = TestClient(app)
 
 
+def test_root_serves_visual_ui_not_a_redirect_or_404():
+    """GET / musi zwracac dzialajaca strone HTML (formularz + miejsce na
+    SVG sieci), nie 404 (pierwsza wersja tego endpointu byla brakiem
+    trasy w ogole) ani sam redirect na /docs (Swagger to surowe API, nie
+    to, co uzytkownik chce zobaczyc po otwarciu przegladarki)."""
+    r = client.get("/")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/html")
+    assert "Zaprojektuj materiał" in r.text
+    assert "/design" in r.text  # strona faktycznie woła nasz endpoint API
+
+
 def test_health_endpoint():
     r = client.get("/health")
     assert r.status_code == 200

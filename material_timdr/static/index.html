@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>TIMDR-Materials-Design</title>
+<style>
+  :root {
+    --bg: #0f1216; --panel: #171b21; --panel2: #1d2229; --border: #2a2f38;
+    --text: #e6e9ee; --muted: #8b93a1; --coral: #e76f51; --teal: #2a9d8f; --accent: #5b9bd5;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, Segoe UI, system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:16px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:baseline; }
+  header h1 { font-size:16px; font-weight:600; margin:0; }
+  header a { color:var(--muted); font-size:12px; text-decoration:none; }
+  header a:hover { color:var(--accent); }
+  .layout { display:grid; grid-template-columns: 340px 1fr; gap:0; min-height:calc(100vh - 53px); }
+  .panel { padding:20px; }
+  .form-panel { border-right:1px solid var(--border); background:var(--panel); }
+  label { display:block; font-size:12px; color:var(--muted); margin:12px 0 4px; }
+  select, input { width:100%; padding:7px 8px; background:var(--panel2); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  button { margin-top:18px; width:100%; padding:10px; background:var(--accent); border:none; border-radius:6px; color:#fff; font-size:13px; font-weight:600; cursor:pointer; }
+  button:hover { opacity:.9; }
+  button:disabled { opacity:.5; cursor:default; }
+  .hint { font-size:11px; color:var(--muted); margin-top:4px; line-height:1.4; }
+  .metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; margin-bottom:16px; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px; }
+  .card .lbl { font-size:12px; color:var(--muted); }
+  .card .val { font-size:22px; font-weight:600; margin-top:2px; }
+  .status-PASS { color:#4caf7a; } .status-FAIL { color:var(--coral); } .status-INCOMPLETE { color:#d9a441; }
+  .block { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:14px; }
+  .block h3 { margin:0 0 8px; font-size:13px; color:var(--muted); font-weight:600; }
+  .legend { display:flex; gap:14px; margin-top:8px; font-size:11px; color:var(--muted); flex-wrap:wrap; }
+  .legend span.dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; vertical-align:middle; }
+  .crit { font-size:12px; padding:6px 0; border-bottom:1px solid var(--border); }
+  .crit:last-child { border-bottom:none; }
+  #empty { color:var(--muted); font-size:13px; padding:40px; text-align:center; }
+  #err { color:var(--coral); font-size:12px; margin-top:10px; white-space:pre-wrap; }
+  .verdict { font-size:12px; line-height:1.5; color:var(--muted); }
+  svg { width:100%; height:auto; display:block; }
+</style>
+</head>
+<body>
+<header>
+  <h1>TIMDR-Materials-Design</h1>
+  <a href="/docs" target="_blank">API docs (Swagger) &rarr;</a>
+</header>
+<div class="layout">
+  <div class="panel form-panel">
+    <label>Funkcja materiału (primary_function)</label>
+    <select id="fn"></select>
+
+    <label>Zakres temperatury pracy (°C)</label>
+    <div class="row2">
+      <input id="tmin" type="number" value="-20">
+      <input id="tmax" type="number" value="80">
+    </div>
+
+    <label>Rozmiar sieci</label>
+    <div class="row2">
+      <input id="n1" type="number" value="6" min="2">
+      <input id="n2" type="number" value="6" min="2">
+    </div>
+    <div class="hint">sp2 (conductivity/catalysis) → sieć 2D (n1,n2). sp3 (strength/damping/magnetism) → sieć 3D, trzeci wymiar poniżej.</div>
+    <input id="n3" type="number" value="3" min="2" style="margin-top:6px; display:none;">
+
+    <label>Atom domieszki (dopant, opcjonalnie)</label>
+    <input id="dopant" type="number" placeholder="np. 10">
+
+    <label>Siła domieszki (amplituda)</label>
+    <input id="amp" type="number" value="2.0" step="0.1">
+
+    <label>Seed (powtarzalność wyniku)</label>
+    <input id="seed" type="number" value="1">
+
+    <button id="go">Zaprojektuj materiał</button>
+    <div id="err"></div>
+  </div>
+
+  <div class="panel" id="results">
+    <div id="empty">Wypełnij formularz po lewej i kliknij "Zaprojektuj materiał" — zobaczysz sieć atomową, wykrycia TIMDR (anomalia/defekt/skręt/rezonans) i checklistę zamknięcia projektu (Krok 8).</div>
+  </div>
+</div>
+
+<script>
+const fnSelect = document.getElementById('fn');
+const n3Input = document.getElementById('n3');
+
+fetch('/functions').then(r => r.json()).then(d => {
+  fnSelect.innerHTML = d.primary_functions.map(f => `<option value="${f}">${f}</option>`).join('');
+  toggleDim();
+});
+fnSelect.addEventListener('change', toggleDim);
+function toggleDim() {
+  const is3d = ['strength', 'damping', 'magnetism'].includes(fnSelect.value);
+  n3Input.style.display = is3d ? 'block' : 'none';
+}
+
+document.getElementById('go').addEventListener('click', async () => {
+  const btn = document.getElementById('go');
+  const errBox = document.getElementById('err');
+  errBox.textContent = '';
+  btn.disabled = true; btn.textContent = 'Liczę…';
+
+  const is3d = ['strength', 'damping', 'magnetism'].includes(fnSelect.value);
+  const lattice_size = is3d
+    ? [parseInt(document.getElementById('n1').value), parseInt(document.getElementById('n2').value), parseInt(document.getElementById('n3').value)]
+    : [parseInt(document.getElementById('n1').value), parseInt(document.getElementById('n2').value)];
+  const dopantVal = document.getElementById('dopant').value;
+  const dopant_atoms = dopantVal !== '' ? [parseInt(dopantVal)] : null;
+
+  const payload = {
+    requirements: {
+      primary_function: fnSelect.value,
+      temperature_range_c: [parseFloat(document.getElementById('tmin').value), parseFloat(document.getElementById('tmax').value)],
+    },
+    lattice_size,
+    dopant_atoms,
+    dopant_amplitude: parseFloat(document.getElementById('amp').value),
+    target_region_atoms: dopant_atoms,
+    seed: parseInt(document.getElementById('seed').value),
+  };
+
+  try {
+    const r = await fetch('/design', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+    const body = await r.json();
+    if (!r.ok) { throw new Error(body.detail || 'Nieznany błąd'); }
+    render(body);
+  } catch (e) {
+    errBox.textContent = 'Błąd: ' + e.message;
+  } finally {
+    btn.disabled = false; btn.textContent = 'Zaprojektuj materiał';
+  }
+});
+
+function render(d) {
+  const rez = new Set(d.timdr.rezonans_idx);
+  const single = new Set();
+  Object.values(d.timdr.anomaly_idx).flat().forEach(i => single.add(i));
+  Object.values(d.timdr.defekt_idx).flat().forEach(i => single.add(i));
+  d.timdr.skret_idx.forEach(i => single.add(i));
+  rez.forEach(i => single.delete(i));
+  const target = new Set(d.field.target_region);
+
+  const pos = d.lattice.positions; // [[x,y] или [x,y,z]]
+  const is3d = pos[0].length === 3;
+  // rzut 3D: proste x,y (ignorujemy z) - wystarczające jako podgląd topologii
+  const xs = pos.map(p => p[0]), ys = pos.map(p => p[1]);
+  const xmin = Math.min(...xs), xmax = Math.max(...xs);
+  const ymin = Math.min(...ys), ymax = Math.max(...ys);
+  const W = 640, H = 380, PAD = 24;
+  const sx = x => PAD + (x - xmin) / (xmax - xmin || 1) * (W - 2*PAD);
+  const sy = y => PAD + (y - ymin) / (ymax - ymin || 1) * (H - 2*PAD);
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}">`;
+  for (const [a, b] of d.lattice.edges) {
+    svg += `<line x1="${sx(pos[a][0]).toFixed(1)}" y1="${sy(pos[a][1]).toFixed(1)}" x2="${sx(pos[b][0]).toFixed(1)}" y2="${sy(pos[b][1]).toFixed(1)}" stroke="#3a4150" stroke-width="1.1"/>`;
+  }
+  for (let i = 0; i < pos.length; i++) {
+    const x = sx(pos[i][0]), y = sy(pos[i][1]);
+    let color = '#5b6472', r = 2.6, op = '0.6';
+    if (single.has(i)) { color = 'var(--teal)'; r = 4; op = '1'; }
+    if (rez.has(i)) { color = 'var(--coral)'; r = 5.5; op = '1'; }
+    svg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="${color}" fill-opacity="${op}"/>`;
+    if (target.has(i)) svg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="9" fill="none" stroke="#aab2c0" stroke-width="1.1" stroke-dasharray="3 2"/>`;
+  }
+  svg += `</svg>`;
+
+  const mr = d.mapping_result;
+  const c = d.closeout;
+  const criteriaHtml = c.criteria.map(cr =>
+    `<div class="crit"><span class="status-${cr.status}">[${cr.status}]</span> ${cr.name_pl} — ${cr.detail_pl}</div>`
+  ).join('');
+
+  document.getElementById('results').innerHTML = `
+    <div class="metrics">
+      <div class="card"><div class="lbl">Atomy</div><div class="val">${d.lattice.n_atoms}</div></div>
+      <div class="card"><div class="lbl">Wiązania</div><div class="val">${d.lattice.n_edges}</div></div>
+      <div class="card"><div class="lbl">Rezonans</div><div class="val" style="color:var(--coral)">${rez.size}</div></div>
+      <div class="card"><div class="lbl">p-value (Krok 5)</div><div class="val">${mr.p_value !== null ? mr.p_value.toFixed(4) : '—'}</div></div>
+      <div class="card"><div class="lbl">Status (Krok 8)</div><div class="val status-${c.overall_status}">${c.overall_status}</div></div>
+    </div>
+    <div class="block">
+      <h3>Sieć atomowa — ${d.figure_suggestion.base_figure.name} ${is3d ? '(rzut 3D→2D)' : ''}</h3>
+      ${svg}
+      <div class="legend">
+        <div><span class="dot" style="background:var(--coral)"></span>rezonans (anomalia+defekt+skręt)</div>
+        <div><span class="dot" style="background:var(--teal)"></span>pojedynczy detektor</div>
+        <div><span class="dot" style="background:#5b6472"></span>brak detekcji</div>
+        <div><span style="display:inline-block;width:9px;height:9px;border-radius:50%;border:1.1px dashed #aab2c0;margin-right:4px;"></span>strefa docelowa</div>
+      </div>
+    </div>
+    <div class="block">
+      <h3>Krok 5 — mapowanie rezonans → funkcja</h3>
+      <div class="verdict">${mr.verdict_pl}</div>
+    </div>
+    <div class="block">
+      <h3>Krok 8 — checklista zamknięcia</h3>
+      ${criteriaHtml}
+    </div>
+    <div class="block">
+      <h3>Krok 6 — sugestia syntezy</h3>
+      <div class="verdict">${d.synthesis_suggestion.notes_pl}</div>
+    </div>
+  `;
+}
+</script>
+</body>
+</html>
