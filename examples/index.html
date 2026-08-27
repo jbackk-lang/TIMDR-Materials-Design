@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>TIMDR-Materials-Design</title>
+<style>
+  :root {
+    --bg: #0f1216; --panel: #171b21; --panel2: #1d2229; --border: #2a2f38;
+    --text: #e6e9ee; --muted: #8b93a1; --coral: #e76f51; --teal: #2a9d8f; --accent: #5b9bd5;
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: -apple-system, Segoe UI, system-ui, sans-serif; background:var(--bg); color:var(--text); }
+  header { padding:16px 24px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:baseline; }
+  header h1 { font-size:16px; font-weight:600; margin:0; }
+  header a { color:var(--muted); font-size:12px; text-decoration:none; }
+  header a:hover { color:var(--accent); }
+  .layout { display:grid; grid-template-columns: 340px 1fr; gap:0; min-height:calc(100vh - 53px); }
+  .panel { padding:20px; }
+  .form-panel { border-right:1px solid var(--border); background:var(--panel); }
+  label { display:block; font-size:12px; color:var(--muted); margin:12px 0 4px; }
+  select, input { width:100%; padding:7px 8px; background:var(--panel2); border:1px solid var(--border); border-radius:6px; color:var(--text); font-size:13px; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  button { margin-top:18px; width:100%; padding:10px; background:var(--accent); border:none; border-radius:6px; color:#fff; font-size:13px; font-weight:600; cursor:pointer; }
+  button:hover { opacity:.9; }
+  button:disabled { opacity:.5; cursor:default; }
+  .hint { font-size:11px; color:var(--muted); margin-top:4px; line-height:1.4; }
+  .metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; margin-bottom:16px; }
+  .card { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:12px; }
+  .card .lbl { font-size:12px; color:var(--muted); }
+  .card .val { font-size:22px; font-weight:600; margin-top:2px; }
+  .status-PASS { color:#4caf7a; } .status-FAIL { color:var(--coral); } .status-INCOMPLETE { color:#d9a441; }
+  .block { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:14px; margin-bottom:14px; }
+  .block h3 { margin:0 0 8px; font-size:13px; color:var(--muted); font-weight:600; }
+  .legend { display:flex; gap:14px; margin-top:8px; font-size:11px; color:var(--muted); flex-wrap:wrap; }
+  .legend span.dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; vertical-align:middle; }
+  .crit { font-size:12px; padding:6px 0; border-bottom:1px solid var(--border); }
+  .crit:last-child { border-bottom:none; }
+  #empty { color:var(--muted); font-size:13px; padding:40px; text-align:center; }
+  #err { color:var(--coral); font-size:12px; margin-top:10px; white-space:pre-wrap; }
+  .verdict { font-size:12px; line-height:1.5; color:var(--muted); }
+  svg { width:100%; height:auto; display:block; }
+  .checkrow { display:flex; align-items:flex-start; gap:8px; margin:12px 0 4px; }
+  .checkrow input[type=checkbox] { width:auto; margin-top:2px; }
+  .checkrow .cl { font-size:12px; color:var(--text); cursor:pointer; }
+  .banner { background:#241d14; border:1px solid #4a3a1e; border-radius:8px; padding:12px 14px; margin-bottom:14px; font-size:12px; line-height:1.5; color:#e0c281; }
+  .banner b { color:#f0d28f; }
+</style>
+</head>
+<body>
+<header>
+  <h1>TIMDR-Materials-Design</h1>
+  <a href="/docs" target="_blank">API docs (Swagger) &rarr;</a>
+</header>
+<div class="layout">
+  <div class="panel form-panel">
+    <label>Przykład materiału (opcjonalnie — realne dane)</label>
+    <select id="preset">
+      <option value="">— własna sieć (bond=1.0, bezwymiarowe) —</option>
+    </select>
+    <div class="hint" id="presetNote"></div>
+
+    <label>Funkcja materiału (primary_function)</label>
+    <select id="fn"></select>
+
+    <label>Długość wiązania (Å dla przykładu realnego, inaczej bezwymiarowo)</label>
+    <input id="bond" type="number" value="1.0" step="0.01" min="0.01">
+
+    <label>Zakres temperatury pracy (°C)</label>
+    <div class="row2">
+      <input id="tmin" type="number" value="-20">
+      <input id="tmax" type="number" value="80">
+    </div>
+
+    <label>Rozmiar sieci</label>
+    <div class="row2">
+      <input id="n1" type="number" value="8" min="2">
+      <input id="n2" type="number" value="8" min="2">
+    </div>
+    <div class="hint">sp2 (conductivity/catalysis) → sieć 2D (n1,n2). sp3 (strength/damping/magnetism) → sieć 3D, trzeci wymiar poniżej. Zbyt mała sieć (np. 6×6 dla sp2) nie ma statystycznej mocy, żeby Krok 5 osiągnął istotność — patrz sekcja w README "Dlaczego wynik często wychodzi FAIL/INCOMPLETE". Zbyt DUŻA sieć 3D (>2000 atomów, np. n1·n2·n3·8) zostanie odrzucona od razu (400) — liczenie Q4/Q6 rośnie liniowo i potrafi trwać bardzo długo, patrz "Anuluj" przy przycisku.</div>
+    <input id="n3" type="number" value="3" min="2" style="margin-top:6px; display:none;">
+
+    <label>Atom domieszki (dopant, opcjonalnie)</label>
+    <input id="dopant" type="number" placeholder="np. 10">
+
+    <div class="checkrow">
+      <input type="checkbox" id="widen" checked>
+      <label class="cl" for="widen">Poszerz strefę docelową o sąsiadów domieszki (zalecane)</label>
+    </div>
+    <div class="hint">Bez tego strefa docelowa to sam atom domieszki — gaussowski "pagórek" domieszki ma ZEROWY gradient dokładnie w swoim szczycie, więc Krok 5 prawie zawsze wyjdzie p=1.0 (FAIL), niezależnie od reszty ustawień. Sąsiedzi domieszki leżą na zboczu pagórka, gdzie sygnał faktycznie jest wykrywany.</div>
+
+    <label>Siła domieszki (amplituda)</label>
+    <input id="amp" type="number" value="1.0" step="0.1">
+
+    <label>Rozmycie domieszki (sigma, opcjonalnie — mniejsze = węższy sygnał)</label>
+    <input id="sigma" type="number" placeholder="domyślnie: 2× długość wiązania" step="0.1" min="0.01">
+    <div class="hint">Za duże sigma względem strefy docelowej niemal zawsze da FAIL na kryterium "anomalia tylko w strefie docelowej" (Krok 8), niezależnie od reszty ustawień — spróbuj np. 0.5-0.7 przy domyślnej długości wiązania 1.0, żeby zobaczyć realny PASS.</div>
+
+    <label>Strefa krytyczna (opcjonalnie, indeksy po przecinku)</label>
+    <input id="critical" type="text" placeholder="np. 0,1,2,3">
+    <div class="hint">Potrzebna, żeby ocenić kryteria "defekt/skręt nie naruszają strefy krytycznej" (Krok 8) — bez niej te dwa kryteria zawsze wychodzą NOT_EVALUATED, co ogranicza status do co najwyżej INCOMPLETE.</div>
+
+    <label>Seed (powtarzalność wyniku)</label>
+    <input id="seed" type="number" value="1">
+
+    <button id="go">Zaprojektuj materiał</button>
+    <button id="cancel" type="button" style="display:none; background:var(--panel2); border:1px solid var(--border); color:var(--text);">Anuluj</button>
+    <div id="err"></div>
+  </div>
+
+  <div class="panel" id="results">
+    <div id="empty">Wypełnij formularz po lewej i kliknij "Zaprojektuj materiał" — zobaczysz sieć atomową, wykrycia TIMDR (anomalia/defekt/skręt/rezonans) i checklistę zamknięcia projektu (Krok 8).</div>
+  </div>
+</div>
+
+<script>
+const fnSelect = document.getElementById('fn');
+const n3Input = document.getElementById('n3');
+const presetSelect = document.getElementById('preset');
+const bondInput = document.getElementById('bond');
+const presetNote = document.getElementById('presetNote');
+let PRESETS = {};
+
+fetch('/functions').then(r => r.json()).then(async d => {
+  fnSelect.innerHTML = d.primary_functions.map(f => `<option value="${f}">${f}</option>`).join('');
+  toggleDim();
+  await suggestAndFill();  // wypelnij dopant/critical/sigma dla domyslnych ustawien od razu
+});
+fnSelect.addEventListener('change', async () => {
+  toggleDim();
+  presetSelect.value = ''; presetNote.textContent = '';
+  await suggestAndFill();
+});
+function toggleDim() {
+  const is3d = ['strength', 'damping', 'magnetism'].includes(fnSelect.value);
+  n3Input.style.display = is3d ? 'block' : 'none';
+}
+
+// Przyklady prawdziwych materialow (grafen, h-BN, diament, krzem, german) -
+// dane z presets.py przez GET /materials, jedno zrodlo prawdy (nie
+// duplikujemy dlugosci wiazan tutaj w JS).
+fetch('/materials').then(r => r.json()).then(d => {
+  d.presets.forEach(p => { PRESETS[p.key] = p; });
+  presetSelect.innerHTML += d.presets.map(p =>
+    `<option value="${p.key}">${p.label_pl} — ${p.bond_length_angstrom} Å</option>`
+  ).join('');
+});
+presetSelect.addEventListener('change', async () => {
+  const key = presetSelect.value;
+  if (!key) { presetNote.textContent = ''; return; }
+  const p = PRESETS[key];
+  bondInput.value = p.bond_length_angstrom;
+  fnSelect.value = p.suggested_primary_function;
+  toggleDim();
+  presetNote.textContent = `${p.note_pl} (cytowana stała sieciowa: ${p.known_lattice_constant_angstrom} Å)`;
+  await suggestAndFill();
+});
+
+// Wypelnia dopant/strefe krytyczna/sigma/amplitude WARTOSCIAMI POLICZONYMI
+// NA PRAWDZIWEJ sieci (GET /suggest_demo_params, patrz api.py -
+// Lattice.bulk_mask()), nie zgadywanymi po indeksie - to jest to samo,
+// co robi examples/demo_graphene_dopant.py, tylko dopasowane do
+// aktualnie wybranej funkcji/rozmiaru sieci/dlugosci wiazania w UI.
+// Nie nadpisuje pol, jesli uzytkownik juz cos w nie recznie wpisal.
+async function suggestAndFill() {
+  const is3d = ['strength', 'damping', 'magnetism'].includes(fnSelect.value);
+  const lattice_size = is3d
+    ? [document.getElementById('n1').value, document.getElementById('n2').value, document.getElementById('n3').value]
+    : [document.getElementById('n1').value, document.getElementById('n2').value];
+  const params = new URLSearchParams({
+    primary_function: fnSelect.value,
+    lattice_size: lattice_size.join(','),
+    bond_length: bondInput.value,
+  });
+  try {
+    const r = await fetch('/suggest_demo_params?' + params.toString());
+    if (!r.ok) return;  // siec za mala itp. - zostaw pola puste, uzytkownik wpisze recznie
+    const s = await r.json();
+    const dopantEl = document.getElementById('dopant');
+    const criticalEl = document.getElementById('critical');
+    const sigmaEl = document.getElementById('sigma');
+    if (dopantEl.value === '') dopantEl.value = s.dopant_atom;
+    if (criticalEl.value === '') criticalEl.value = s.critical_region.join(',');
+    if (sigmaEl.value === '') sigmaEl.value = s.suggested_dopant_sigma;
+  } catch (e) { /* brak polaczenia itp. - ciche pominiecie, pola zostana puste */ }
+}
+
+let currentAbort = null;
+
+// "Anuluj" przerywa OCZEKIWANIE PRZEGLADARKI na odpowiedz (AbortController)
+// i od razu przywraca formularz do stanu poczatkowego - NIE gwarantuje, ze
+// serwer faktycznie przestaje liczyc (Python/uvicorn nie ma latwego sposobu
+// przerwania juz trwajacej, synchronicznej petli w steinhardt.py w trakcie
+// jej wykonywania) - ale to jest dokladnie to, o co chodzilo w zgloszeniu:
+// UI, ktore "wisi" (przycisk "Liczę…" na zawsze) bez mozliwosci powrotu do
+// poczatku. Patrz tez MAX_ATOMS_3D/MAX_ATOMS_2D w api.py - te dwie rzeczy
+// razem (twardy limit + mozliwosc anulowania) rozwiazuja problem od dwoch
+// stron: limit lapie skrajne przypadki od razu (400 zamiast liczenia),
+// Anuluj daje wyjscie z reki uzytkownikowi, gdyby cos i tak trwalo dluzej
+// niz sie spodziewal.
+document.getElementById('cancel').addEventListener('click', () => {
+  if (currentAbort) currentAbort.abort();
+  resetGoButton();
+});
+
+function resetGoButton() {
+  const btn = document.getElementById('go');
+  const cancelBtn = document.getElementById('cancel');
+  btn.disabled = false; btn.textContent = 'Zaprojektuj materiał';
+  cancelBtn.style.display = 'none';
+  currentAbort = null;
+}
+
+document.getElementById('go').addEventListener('click', async () => {
+  const btn = document.getElementById('go');
+  const cancelBtn = document.getElementById('cancel');
+  const errBox = document.getElementById('err');
+  errBox.textContent = '';
+  btn.disabled = true; btn.textContent = 'Liczę…';
+  cancelBtn.style.display = 'block';
+  currentAbort = new AbortController();
+
+  const is3d = ['strength', 'damping', 'magnetism'].includes(fnSelect.value);
+  const lattice_size = is3d
+    ? [parseInt(document.getElementById('n1').value), parseInt(document.getElementById('n2').value), parseInt(document.getElementById('n3').value)]
+    : [parseInt(document.getElementById('n1').value), parseInt(document.getElementById('n2').value)];
+  const dopantVal = document.getElementById('dopant').value;
+  const dopant_atoms = dopantVal !== '' ? [parseInt(dopantVal)] : null;
+  const criticalVal = document.getElementById('critical').value.trim();
+  const critical_region_atoms = criticalVal !== ''
+    ? criticalVal.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n))
+    : null;
+
+  const payload = {
+    requirements: {
+      primary_function: fnSelect.value,
+      temperature_range_c: [parseFloat(document.getElementById('tmin').value), parseFloat(document.getElementById('tmax').value)],
+    },
+    lattice_size,
+    bond_length: parseFloat(bondInput.value),
+    dopant_atoms,
+    dopant_amplitude: parseFloat(document.getElementById('amp').value),
+    dopant_sigma: document.getElementById('sigma').value !== '' ? parseFloat(document.getElementById('sigma').value) : null,
+    // target_region_atoms CELOWO nie jest tu ustawiany na dopant_atoms -
+    // zostaw null i pozwol backendowi (widen_target_to_dopant_neighbors)
+    // poprawnie poszerzyc strefe o sasiadow, patrz checkbox "widen" wyzej
+    // i pipeline.py (ta sama lekcja co w examples/demo_graphene_dopant.py).
+    target_region_atoms: null,
+    widen_target_to_dopant_neighbors: document.getElementById('widen').checked,
+    critical_region_atoms,
+    seed: parseInt(document.getElementById('seed').value),
+  };
+
+  try {
+    const r = await fetch('/design', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload), signal: currentAbort.signal,
+    });
+    const body = await r.json();
+    if (!r.ok) { throw new Error(body.detail || 'Nieznany błąd'); }
+    render(body);
+  } catch (e) {
+    if (e.name === 'AbortError') {
+      errBox.textContent = 'Anulowano.';
+    } else {
+      errBox.textContent = 'Błąd: ' + e.message;
+    }
+  } finally {
+    resetGoButton();
+  }
+});
+
+function render(d) {
+  const rez = new Set(d.timdr.rezonans_idx);
+  const single = new Set();
+  Object.values(d.timdr.anomaly_idx).flat().forEach(i => single.add(i));
+  Object.values(d.timdr.defekt_idx).flat().forEach(i => single.add(i));
+  d.timdr.skret_idx.forEach(i => single.add(i));
+  rez.forEach(i => single.delete(i));
+  const target = new Set(d.field.target_region);
+
+  const pos = d.lattice.positions; // [[x,y] или [x,y,z]]
+  const is3d = pos[0].length === 3;
+  // rzut 3D: proste x,y (ignorujemy z) - wystarczające jako podgląd topologii
+  const xs = pos.map(p => p[0]), ys = pos.map(p => p[1]);
+  const xmin = Math.min(...xs), xmax = Math.max(...xs);
+  const ymin = Math.min(...ys), ymax = Math.max(...ys);
+  const W = 640, H = 380, PAD = 24;
+  const sx = x => PAD + (x - xmin) / (xmax - xmin || 1) * (W - 2*PAD);
+  const sy = y => PAD + (y - ymin) / (ymax - ymin || 1) * (H - 2*PAD);
+
+  let svg = `<svg viewBox="0 0 ${W} ${H}">`;
+  for (const [a, b] of d.lattice.edges) {
+    svg += `<line x1="${sx(pos[a][0]).toFixed(1)}" y1="${sy(pos[a][1]).toFixed(1)}" x2="${sx(pos[b][0]).toFixed(1)}" y2="${sy(pos[b][1]).toFixed(1)}" stroke="#3a4150" stroke-width="1.1"/>`;
+  }
+  for (let i = 0; i < pos.length; i++) {
+    const x = sx(pos[i][0]), y = sy(pos[i][1]);
+    let color = '#5b6472', r = 2.6, op = '0.6';
+    if (single.has(i)) { color = 'var(--teal)'; r = 4; op = '1'; }
+    if (rez.has(i)) { color = 'var(--coral)'; r = 5.5; op = '1'; }
+    svg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="${color}" fill-opacity="${op}"/>`;
+    if (target.has(i)) svg += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="9" fill="none" stroke="#aab2c0" stroke-width="1.1" stroke-dasharray="3 2"/>`;
+  }
+  svg += `</svg>`;
+
+  const mr = d.mapping_result;
+  const c = d.closeout;
+  const criteriaHtml = c.criteria.map(cr =>
+    `<div class="crit"><span class="status-${cr.status}">[${cr.status}]</span> ${cr.name_pl} — ${cr.detail_pl}</div>`
+  ).join('');
+
+  let banner = '';
+  if (c.overall_status !== 'PASS') {
+    const notEval = c.criteria.filter(cr => cr.status === 'NOT_EVALUATED');
+    const failed = c.criteria.filter(cr => cr.status === 'FAIL');
+    const reasons = [];
+    if (notEval.some(cr => cr.name_pl.includes('krytyczn'))) {
+      reasons.push('Kryteria dot. strefy krytycznej są NOT_EVALUATED, bo pole "Strefa krytyczna" jest puste — to nie błąd, tylko brakujące dane wejściowe (podaj listę indeksów atomów, żeby je ocenić).');
+    }
+    if (notEval.some(cr => cr.name_pl.includes('funkcj'))) {
+      reasons.push('Kryterium rezonans↔funkcja jest NOT_EVALUATED, bo nie podano atomu domieszki (target_region jest puste) — Krok 5 nie ma czego testować.');
+    }
+    if (failed.some(cr => cr.name_pl.includes('docelowej'))) {
+      reasons.push('Anomalia FAIL: strefa anomalii (z-score na dopant_proxy) jest szersza niż strefa docelowa — to realna właściwość gaussowskiego "pagórka" domieszki przy tej amplitudzie/sigmie, nie błąd. Spróbuj zmniejszyć "Rozmycie domieszki (sigma)" (np. do 0.5-0.7) albo amplitudę.');
+    }
+    if (failed.some(cr => cr.name_pl.includes('funkcj'))) {
+      reasons.push(`Rezonans↔funkcja FAIL (p=${mr.p_value !== null ? mr.p_value.toFixed(4) : '?'}): pokrycie rezonansu ze strefą docelową nie jest statystycznie lepsze niż losowe. Sprawdź, czy zaznaczony jest checkbox "Poszerz strefę docelową" — bez niego to niemal zawsze FAIL (patrz opis przy checkboxie).`);
+    }
+    if (reasons.length) {
+      banner = `<div class="banner"><b>Status ${c.overall_status}, nie PASS</b> — to często oczekiwany, uczciwie zaraportowany wynik, nie znak brakujących danych:<br>${reasons.map(r => '• ' + r).join('<br>')}</div>`;
+    }
+  }
+
+  document.getElementById('results').innerHTML = `
+    ${banner}
+    <div class="metrics">
+      <div class="card"><div class="lbl">Atomy</div><div class="val">${d.lattice.n_atoms}</div></div>
+      <div class="card"><div class="lbl">Wiązania</div><div class="val">${d.lattice.n_edges}</div></div>
+      <div class="card"><div class="lbl">Dł. wiązania</div><div class="val">${d.lattice.bond_length}</div></div>
+      <div class="card"><div class="lbl">Rezonans</div><div class="val" style="color:var(--coral)">${rez.size}</div></div>
+      <div class="card"><div class="lbl">p-value (Krok 5)</div><div class="val">${mr.p_value !== null ? mr.p_value.toFixed(4) : '—'}</div></div>
+      <div class="card"><div class="lbl">Status (Krok 8)</div><div class="val status-${c.overall_status}">${c.overall_status}</div></div>
+    </div>
+    <div class="block">
+      <h3>Sieć atomowa — ${d.figure_suggestion.base_figure.name} ${is3d ? '(rzut 3D→2D)' : ''}</h3>
+      ${svg}
+      <div class="legend">
+        <div><span class="dot" style="background:var(--coral)"></span>rezonans (anomalia+defekt+skręt)</div>
+        <div><span class="dot" style="background:var(--teal)"></span>pojedynczy detektor</div>
+        <div><span class="dot" style="background:#5b6472"></span>brak detekcji</div>
+        <div><span style="display:inline-block;width:9px;height:9px;border-radius:50%;border:1.1px dashed #aab2c0;margin-right:4px;"></span>strefa docelowa</div>
+      </div>
+    </div>
+    <div class="block">
+      <h3>Krok 5 — mapowanie rezonans → funkcja</h3>
+      <div class="verdict">${mr.verdict_pl}</div>
+    </div>
+    <div class="block">
+      <h3>Krok 8 — checklista zamknięcia</h3>
+      ${criteriaHtml}
+    </div>
+    <div class="block">
+      <h3>Krok 6 — sugestia syntezy</h3>
+      <div class="verdict">${d.synthesis_suggestion.notes_pl}</div>
+    </div>
+  `;
+}
+</script>
+</body>
+</html>
