@@ -28,7 +28,7 @@ więc jest wywoływany osobno — pełny przykład obu razem:
 
 ```bash
 pip install -r requirements.txt
-pytest -v                                  # 130 testów
+pytest -v                                  # 134 testów
 PYTHONPATH=. python examples/demo_graphene_dopant.py
 ```
 
@@ -60,6 +60,24 @@ materiał" - bez przeładowania strony. Dokumentacja Swagger dla wywołań
 programowych dostępna osobno pod `/docs` (link w nagłówku UI), generowana
 automatycznie z modeli Pydantic w `api.py`. Zatrzymanie serwera: Ctrl+C w
 oknie konsoli.
+
+**Limit rozmiaru sieci + przycisk "Anuluj":** `steinhardt.py` liczy Q4/Q6
+(potrzebne tylko dla sieci 3D - strength/damping/magnesizm) czystą pętlą
+Pythona (scipy `sph_harm_y` wołane osobno per atom×sąsiad×m) - NIE jest to
+zwektoryzowane, więc czas rośnie w przybliżeniu liniowo z liczbą atomów i
+NIE da się tego przerwać w trakcie liczenia. Zbyt duża siec wpisana w UI
+potrafiła wisieć bardzo długo bez żadnego komunikatu i bez możliwości
+powrotu do formularza (zgłoszone jako "zawieszony" interfejs). Naprawione
+dwustronnie: (1) `/design` i `/suggest_demo_params` odrzucają za dużą sieć
+NATYCHMIAST, zanim cokolwiek zacznie się liczyć (`MAX_ATOMS_3D=2000`,
+`MAX_ATOMS_2D=20000` w `api.py`, dobrane na podstawie zmierzonych czasów:
+2000 atomów 3D → ok. 12.6s, 3200 atomów 3D → ok. 25.2s, 20000 atomów 2D →
+ok. 7.5s pełnego `design_material()`, ta sama maszyna); (2) UI ma przycisk
+"Anuluj" obok "Zaprojektuj materiał" (AbortController) - przerywa
+OCZEKIWANIE przeglądarki i od razu przywraca formularz do stanu
+początkowego, nawet jeśli serwer sam w sobie nadal coś liczy w tle
+(Python/uvicorn nie ma łatwego sposobu przerwania już trwającej,
+synchronicznej pętli).
 
 **Przykłady prawdziwych materiałów** - lista "Przykład materiału" w UI
 (zasilana przez `GET /materials`, dane z `presets.py`, te same liczby co
@@ -280,7 +298,7 @@ material_timdr/
     api.py               — REST API (FastAPI) nad pipeline.design_material()
     presets.py            — przykłady prawdziwych materiałów (grafen, h-BN, diament, krzem, german) do UI/API
     static/index.html     — wizualny UI serwowany pod GET / (formularz + SVG sieci + lista przykładów)
-tests/                    — 130 testów pytest (w tym test_real_materials.py: grafen, h-BN, diament, krzem, german; test_api.py: warstwa HTTP + UI + presety + osiągalność PASS; test_lattice.py/test_spatial_timdr.py: Lattice.bulk_mask() i poprawka warunku brzegowego Q4/Q6)
+tests/                    — 134 testy pytest (w tym test_real_materials.py: grafen, h-BN, diament, krzem, german; test_api.py: warstwa HTTP + UI + presety + osiągalność PASS + limit rozmiaru sieci; test_lattice.py/test_spatial_timdr.py: Lattice.bulk_mask() i poprawka warunku brzegowego Q4/Q6)
 examples/
     demo_graphene_dopant.py — pełny przebieg 8 kroków na jednym przykładzie
 run.bat                    — Windows: uruchamia API lokalnie (patrz sekcja "API" wyżej)

@@ -76,7 +76,7 @@
       <input id="n1" type="number" value="8" min="2">
       <input id="n2" type="number" value="8" min="2">
     </div>
-    <div class="hint">sp2 (conductivity/catalysis) → sieć 2D (n1,n2). sp3 (strength/damping/magnetism) → sieć 3D, trzeci wymiar poniżej. Zbyt mała sieć (np. 6×6 dla sp2) nie ma statystycznej mocy, żeby Krok 5 osiągnął istotność — patrz sekcja w README "Dlaczego wynik często wychodzi FAIL/INCOMPLETE".</div>
+    <div class="hint">sp2 (conductivity/catalysis) → sieć 2D (n1,n2). sp3 (strength/damping/magnetism) → sieć 3D, trzeci wymiar poniżej. Zbyt mała sieć (np. 6×6 dla sp2) nie ma statystycznej mocy, żeby Krok 5 osiągnął istotność — patrz sekcja w README "Dlaczego wynik często wychodzi FAIL/INCOMPLETE". Zbyt DUŻA sieć 3D (>2000 atomów, np. n1·n2·n3·8) zostanie odrzucona od razu (400) — liczenie Q4/Q6 rośnie liniowo i potrafi trwać bardzo długo, patrz "Anuluj" przy przycisku.</div>
     <input id="n3" type="number" value="3" min="2" style="margin-top:6px; display:none;">
 
     <label>Atom domieszki (dopant, opcjonalnie)</label>
@@ -103,6 +103,7 @@
     <input id="seed" type="number" value="1">
 
     <button id="go">Zaprojektuj materiał</button>
+    <button id="cancel" type="button" style="display:none; background:var(--panel2); border:1px solid var(--border); color:var(--text);">Anuluj</button>
     <div id="err"></div>
   </div>
 
@@ -183,11 +184,40 @@ async function suggestAndFill() {
   } catch (e) { /* brak polaczenia itp. - ciche pominiecie, pola zostana puste */ }
 }
 
+let currentAbort = null;
+
+// "Anuluj" przerywa OCZEKIWANIE PRZEGLADARKI na odpowiedz (AbortController)
+// i od razu przywraca formularz do stanu poczatkowego - NIE gwarantuje, ze
+// serwer faktycznie przestaje liczyc (Python/uvicorn nie ma latwego sposobu
+// przerwania juz trwajacej, synchronicznej petli w steinhardt.py w trakcie
+// jej wykonywania) - ale to jest dokladnie to, o co chodzilo w zgloszeniu:
+// UI, ktore "wisi" (przycisk "Liczę…" na zawsze) bez mozliwosci powrotu do
+// poczatku. Patrz tez MAX_ATOMS_3D/MAX_ATOMS_2D w api.py - te dwie rzeczy
+// razem (twardy limit + mozliwosc anulowania) rozwiazuja problem od dwoch
+// stron: limit lapie skrajne przypadki od razu (400 zamiast liczenia),
+// Anuluj daje wyjscie z reki uzytkownikowi, gdyby cos i tak trwalo dluzej
+// niz sie spodziewal.
+document.getElementById('cancel').addEventListener('click', () => {
+  if (currentAbort) currentAbort.abort();
+  resetGoButton();
+});
+
+function resetGoButton() {
+  const btn = document.getElementById('go');
+  const cancelBtn = document.getElementById('cancel');
+  btn.disabled = false; btn.textContent = 'Zaprojektuj materiał';
+  cancelBtn.style.display = 'none';
+  currentAbort = null;
+}
+
 document.getElementById('go').addEventListener('click', async () => {
   const btn = document.getElementById('go');
+  const cancelBtn = document.getElementById('cancel');
   const errBox = document.getElementById('err');
   errBox.textContent = '';
   btn.disabled = true; btn.textContent = 'Liczę…';
+  cancelBtn.style.display = 'block';
+  currentAbort = new AbortController();
 
   const is3d = ['strength', 'damping', 'magnetism'].includes(fnSelect.value);
   const lattice_size = is3d
@@ -221,14 +251,21 @@ document.getElementById('go').addEventListener('click', async () => {
   };
 
   try {
-    const r = await fetch('/design', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+    const r = await fetch('/design', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload), signal: currentAbort.signal,
+    });
     const body = await r.json();
     if (!r.ok) { throw new Error(body.detail || 'Nieznany błąd'); }
     render(body);
   } catch (e) {
-    errBox.textContent = 'Błąd: ' + e.message;
+    if (e.name === 'AbortError') {
+      errBox.textContent = 'Anulowano.';
+    } else {
+      errBox.textContent = 'Błąd: ' + e.message;
+    }
   } finally {
-    btn.disabled = false; btn.textContent = 'Zaprojektuj materiał';
+    resetGoButton();
   }
 });
 

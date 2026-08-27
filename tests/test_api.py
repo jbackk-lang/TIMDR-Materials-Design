@@ -173,6 +173,59 @@ def test_suggest_demo_params_too_small_lattice_returns_400_not_500():
     assert r.status_code == 400
 
 
+def test_design_too_large_3d_lattice_returns_400_fast_instead_of_hanging():
+    """Regresja na zgloszony przez uzytkownika bug: zbyt duza siec 3D nie
+    dawala bledu, tylko wisiala (steinhardt.py liczy Q4/Q6 nieprzerywalna,
+    liniowa w n_atoms petla Pythona wolajaca scipy.special.sph_harm_y -
+    zmierzone: 3200 atomow -> 25s, patrz komentarz przy MAX_ATOMS_3D w
+    api.py). Ten test musi wrocic NATYCHMIAST z 400, nie liczyc nic."""
+    payload = {
+        "requirements": {"primary_function": "strength", "temperature_range_c": [0, 500]},
+        "lattice_size": [50, 50, 50],  # 50*50*50*8 = 1 000 000 atomow, dalece nad limitem
+    }
+    import time
+    t0 = time.time()
+    r = client.post("/design", json=payload)
+    elapsed = time.time() - t0
+    assert r.status_code == 400
+    assert "za duza" in r.json()["detail"]
+    assert elapsed < 2.0, f"powinno odrzucic natychmiast, zajelo {elapsed:.2f}s"
+
+
+def test_design_too_large_2d_lattice_returns_400_fast():
+    payload = {
+        "requirements": {"primary_function": "conductivity", "temperature_range_c": [-20, 80]},
+        "lattice_size": [1000, 1000],  # 1000*1000*2 = 2 000 000 atomow
+    }
+    r = client.post("/design", json=payload)
+    assert r.status_code == 400
+    assert "za duza" in r.json()["detail"]
+
+
+def test_design_lattice_size_at_3d_limit_boundary_still_works():
+    """Sanity check, ze limit nie jest ustawiony za nisko - siec dokladnie
+    NA granicy (albo tuz pod nia) musi nadal dzialac normalnie, nie 400."""
+    payload = {
+        "requirements": {"primary_function": "strength", "temperature_range_c": [0, 500]},
+        "lattice_size": [5, 5, 5],  # 5*5*5*8 = 1000 atomow, dobrze pod MAX_ATOMS_3D=2000
+        "seed": 1,
+    }
+    r = client.post("/design", json=payload)
+    assert r.status_code == 200
+
+
+def test_suggest_demo_params_too_large_lattice_returns_400_fast():
+    import time
+    t0 = time.time()
+    r = client.get("/suggest_demo_params", params={
+        "primary_function": "strength", "lattice_size": "50,50,50", "bond_length": 1.0,
+    })
+    elapsed = time.time() - t0
+    assert r.status_code == 400
+    assert "za duza" in r.json()["detail"]
+    assert elapsed < 2.0
+
+
 def test_health_endpoint():
     r = client.get("/health")
     assert r.status_code == 200

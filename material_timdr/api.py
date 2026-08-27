@@ -44,6 +44,50 @@ from .lattice import honeycomb_lattice, diamond_lattice
 from .pipeline import design_material, MaterialDesignResult
 from .presets import REAL_MATERIAL_PRESETS
 
+# Górny limit rozmiaru sieci - zabezpieczenie przed "zawieszeniem" serwera.
+# POWÓD (zmierzone bezpośrednio, nie zgadywane): steinhardt.py liczy Q4/Q6
+# (potrzebne tylko dla sieci 3D - strength/damping/magnetism) czystą pętlą
+# Pythona wołającą scipy.special.sph_harm_y osobno dla każdego atomu x
+# sąsiada x wartości m - to NIE jest zwektoryzowane, więc czas rośnie liniowo
+# z liczbą atomów z dość dużym stałym narzutem: 2000 atomów (10x5x5) -> 12.6s,
+# 3200 atomów (10x10x4) -> 25.2s (pełny design_material(), n_permutations=2000,
+# zmierzone na tej maszynie). Serwer (uvicorn, jeden proces) blokuje się na
+# czas liczenia - zbyt duża siec wpisana w UI wisiała bez końca i bez żadnego
+# komunikatu (zgłoszone przez użytkownika). Limit trzyma worst-case w okolicach
+# kilkunastu sekund zamiast dopuszczać wielominutowe/nieskończone zawieszenie.
+# Sieci 2D (honeycomb) NIE mają Q4/Q6 (steinhardt.py w ogóle nie jest
+# wołany) - zmierzone 20000 atomów (100x100) -> 7.5s, więc limit dla 2D
+# jest wyżej.
+MAX_ATOMS_3D = 2000
+MAX_ATOMS_2D = 20000
+
+
+def _check_lattice_size_limit(dimensionality: str, size: tuple[int, ...]) -> None:
+    """Odrzuca za dużą siec PRZED jej wygenerowaniem/policzeniem pól (szybki
+    400 zamiast wielosekundowego/wieloninutowego liczenia bez możliwości
+    przerwania) - patrz uzasadnienie przy MAX_ATOMS_3D/MAX_ATOMS_2D wyżej."""
+    if dimensionality == "2D":
+        n1, n2 = size
+        n_atoms = n1 * n2 * 2  # dwuatomowa baza honeycomb (A, B)
+        limit = MAX_ATOMS_2D
+    else:
+        n1, n2, n3 = size
+        n_atoms = n1 * n2 * n3 * 8  # osmioatomowa baza diamentowa
+        limit = MAX_ATOMS_3D
+    if n_atoms > limit:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Siec za duza: {n_atoms} atomow (limit {limit} dla sieci "
+                f"{dimensionality}). Dla sieci 3D (strength/damping/magnetism) "
+                "liczenie Q4/Q6 (steinhardt.py) rosnie w przyblizeniu liniowo "
+                "z liczba atomow i NIE jest przerywalne w trakcie - zbyt duza "
+                "siec zawiesza serwer na dlugo zamiast dac blad. Zmniejsz "
+                "rozmiar sieci."
+            ),
+        )
+
+
 app = FastAPI(
     title="TIMDR-Materials-Design API",
     description=(
@@ -255,10 +299,12 @@ def suggest_demo_params(primary_function: str, lattice_size: str, bond_length: f
         if figure.base_figure.dimensionality == "2D":
             if len(size) != 2:
                 raise HTTPException(status_code=400, detail="Figura 2D wymaga lattice_size=n1,n2")
+            _check_lattice_size_limit("2D", size)
             lattice = honeycomb_lattice(*size, bond_length=bond_length)
         else:
             if len(size) != 3:
                 raise HTTPException(status_code=400, detail="Figura 3D wymaga lattice_size=n1,n2,n3")
+            _check_lattice_size_limit("3D", size)
             lattice = diamond_lattice(*size, bond_length=bond_length)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -295,6 +341,8 @@ def design(req: DesignRequest) -> dict:
             environment=req.requirements.environment,
             notes=req.requirements.notes,
         )
+        figure_for_limit = suggest_figure(requirements.primary_function)
+        _check_lattice_size_limit(figure_for_limit.base_figure.dimensionality, tuple(req.lattice_size))
         result = design_material(
             requirements,
             lattice_size=tuple(req.lattice_size),
