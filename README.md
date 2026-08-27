@@ -28,7 +28,7 @@ więc jest wywoływany osobno — pełny przykład obu razem:
 
 ```bash
 pip install -r requirements.txt
-pytest -v                                  # 99 testów
+pytest -v                                  # 107 testów
 PYTHONPATH=. python examples/demo_graphene_dopant.py
 ```
 
@@ -42,6 +42,50 @@ req = RequirementsVector(
 result = design_material(req, lattice_size=(8, 8), dopant_atoms=[42], seed=1)
 print(result.closeout.summary_pl)
 ```
+
+## API (REST, lokalnie)
+
+`material_timdr/api.py` wystawia `pipeline.design_material()` przez HTTP
+(FastAPI) - cienka warstwa, nie dodaje żadnej nowej logiki TIMDR ponad to,
+co jest opisane wyżej i przetestowane w `tests/test_pipeline.py`.
+
+**Windows: dwuklik na `run.bat`** - tworzy `.venv`, instaluje zależności,
+startuje serwer na `http://127.0.0.1:8000` (dokumentacja Swagger pod
+`/docs`, generowana automatycznie z modeli Pydantic - nie może się
+rozjechać z kodem). Zatrzymanie: Ctrl+C w oknie konsoli.
+
+Ręcznie (Linux/macOS/Windows z Pythonem w PATH):
+```bash
+pip install -r requirements.txt
+uvicorn material_timdr.api:app --host 127.0.0.1 --port 8000
+```
+
+Endpointy:
+| Metoda | Ścieżka | Co robi |
+|---|---|---|
+| GET | `/health` | health check |
+| GET | `/functions` | lista dozwolonych `primary_function` |
+| POST | `/design` | pełny pipeline `design_material()`, zwraca JSON z figurą, siecią, polem, wynikami TIMDR, mapowaniem (Krok 5) i closeoutem (Krok 8) |
+
+Przykład `POST /design`:
+```bash
+curl -X POST http://127.0.0.1:8000/design -H "Content-Type: application/json" -d '{
+  "requirements": {"primary_function": "conductivity", "temperature_range_c": [-20, 80]},
+  "lattice_size": [6, 6],
+  "dopant_atoms": [10],
+  "dopant_amplitude": 2.0,
+  "target_region_atoms": [10],
+  "seed": 1
+}'
+```
+
+Błędne dane wejściowe (np. `primary_function` spoza `PRIMARY_FUNCTIONS`,
+zły wymiar `lattice_size` względem figury sp2/sp3, indeks atomu poza
+zakresem sieci) zwracają `400` z opisem błędu, nie `500` - sprawdzone w
+`tests/test_api.py`. Krok 7 (walidacja na zmierzonych danych) NIE jest
+wystawiony jako endpoint, bo z natury wymaga zewnętrznych danych
+pomiarowych dostarczonych przez użytkownika - patrz `validate.py` i
+`examples/demo_graphene_dopant.py`.
 
 ## Zakres i ograniczenia (przeczytaj przed użyciem)
 
@@ -149,7 +193,9 @@ material_timdr/
     validate.py          — Krok 7: walidacja na zmierzonych danych
     closeout.py          — Krok 8: checklist zamknięcia
     pipeline.py          — orkiestrator (design_material())
-tests/                    — 99 testów pytest (w tym test_real_materials.py: grafen, h-BN, diament, krzem, german)
+    api.py               — REST API (FastAPI) nad pipeline.design_material()
+tests/                    — 107 testów pytest (w tym test_real_materials.py: grafen, h-BN, diament, krzem, german; test_api.py: warstwa HTTP)
 examples/
     demo_graphene_dopant.py — pełny przebieg 8 kroków na jednym przykładzie
+run.bat                    — Windows: uruchamia API lokalnie (patrz sekcja "API" wyżej)
 ```
