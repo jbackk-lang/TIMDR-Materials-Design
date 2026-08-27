@@ -39,6 +39,11 @@
   #err { color:var(--coral); font-size:12px; margin-top:10px; white-space:pre-wrap; }
   .verdict { font-size:12px; line-height:1.5; color:var(--muted); }
   svg { width:100%; height:auto; display:block; }
+  .checkrow { display:flex; align-items:flex-start; gap:8px; margin:12px 0 4px; }
+  .checkrow input[type=checkbox] { width:auto; margin-top:2px; }
+  .checkrow .cl { font-size:12px; color:var(--text); cursor:pointer; }
+  .banner { background:#241d14; border:1px solid #4a3a1e; border-radius:8px; padding:12px 14px; margin-bottom:14px; font-size:12px; line-height:1.5; color:#e0c281; }
+  .banner b { color:#f0d28f; }
 </style>
 </head>
 <body>
@@ -77,8 +82,22 @@
     <label>Atom domieszki (dopant, opcjonalnie)</label>
     <input id="dopant" type="number" placeholder="np. 10">
 
+    <div class="checkrow">
+      <input type="checkbox" id="widen" checked>
+      <label class="cl" for="widen">Poszerz strefę docelową o sąsiadów domieszki (zalecane)</label>
+    </div>
+    <div class="hint">Bez tego strefa docelowa to sam atom domieszki — gaussowski "pagórek" domieszki ma ZEROWY gradient dokładnie w swoim szczycie, więc Krok 5 prawie zawsze wyjdzie p=1.0 (FAIL), niezależnie od reszty ustawień. Sąsiedzi domieszki leżą na zboczu pagórka, gdzie sygnał faktycznie jest wykrywany.</div>
+
     <label>Siła domieszki (amplituda)</label>
-    <input id="amp" type="number" value="2.0" step="0.1">
+    <input id="amp" type="number" value="1.0" step="0.1">
+
+    <label>Rozmycie domieszki (sigma, opcjonalnie — mniejsze = węższy sygnał)</label>
+    <input id="sigma" type="number" placeholder="domyślnie: 2× długość wiązania" step="0.1" min="0.01">
+    <div class="hint">Za duże sigma względem strefy docelowej niemal zawsze da FAIL na kryterium "anomalia tylko w strefie docelowej" (Krok 8), niezależnie od reszty ustawień — spróbuj np. 0.5-0.7 przy domyślnej długości wiązania 1.0, żeby zobaczyć realny PASS.</div>
+
+    <label>Strefa krytyczna (opcjonalnie, indeksy po przecinku)</label>
+    <input id="critical" type="text" placeholder="np. 0,1,2,3">
+    <div class="hint">Potrzebna, żeby ocenić kryteria "defekt/skręt nie naruszają strefy krytycznej" (Krok 8) — bez niej te dwa kryteria zawsze wychodzą NOT_EVALUATED, co ogranicza status do co najwyżej INCOMPLETE.</div>
 
     <label>Seed (powtarzalność wyniku)</label>
     <input id="seed" type="number" value="1">
@@ -141,6 +160,10 @@ document.getElementById('go').addEventListener('click', async () => {
     : [parseInt(document.getElementById('n1').value), parseInt(document.getElementById('n2').value)];
   const dopantVal = document.getElementById('dopant').value;
   const dopant_atoms = dopantVal !== '' ? [parseInt(dopantVal)] : null;
+  const criticalVal = document.getElementById('critical').value.trim();
+  const critical_region_atoms = criticalVal !== ''
+    ? criticalVal.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n))
+    : null;
 
   const payload = {
     requirements: {
@@ -151,7 +174,14 @@ document.getElementById('go').addEventListener('click', async () => {
     bond_length: parseFloat(bondInput.value),
     dopant_atoms,
     dopant_amplitude: parseFloat(document.getElementById('amp').value),
-    target_region_atoms: dopant_atoms,
+    dopant_sigma: document.getElementById('sigma').value !== '' ? parseFloat(document.getElementById('sigma').value) : null,
+    // target_region_atoms CELOWO nie jest tu ustawiany na dopant_atoms -
+    // zostaw null i pozwol backendowi (widen_target_to_dopant_neighbors)
+    // poprawnie poszerzyc strefe o sasiadow, patrz checkbox "widen" wyzej
+    // i pipeline.py (ta sama lekcja co w examples/demo_graphene_dopant.py).
+    target_region_atoms: null,
+    widen_target_to_dopant_neighbors: document.getElementById('widen').checked,
+    critical_region_atoms,
     seed: parseInt(document.getElementById('seed').value),
   };
 
@@ -206,7 +236,30 @@ function render(d) {
     `<div class="crit"><span class="status-${cr.status}">[${cr.status}]</span> ${cr.name_pl} — ${cr.detail_pl}</div>`
   ).join('');
 
+  let banner = '';
+  if (c.overall_status !== 'PASS') {
+    const notEval = c.criteria.filter(cr => cr.status === 'NOT_EVALUATED');
+    const failed = c.criteria.filter(cr => cr.status === 'FAIL');
+    const reasons = [];
+    if (notEval.some(cr => cr.name_pl.includes('krytyczn'))) {
+      reasons.push('Kryteria dot. strefy krytycznej są NOT_EVALUATED, bo pole "Strefa krytyczna" jest puste — to nie błąd, tylko brakujące dane wejściowe (podaj listę indeksów atomów, żeby je ocenić).');
+    }
+    if (notEval.some(cr => cr.name_pl.includes('funkcj'))) {
+      reasons.push('Kryterium rezonans↔funkcja jest NOT_EVALUATED, bo nie podano atomu domieszki (target_region jest puste) — Krok 5 nie ma czego testować.');
+    }
+    if (failed.some(cr => cr.name_pl.includes('docelowej'))) {
+      reasons.push('Anomalia FAIL: strefa anomalii (z-score na dopant_proxy) jest szersza niż strefa docelowa — to realna właściwość gaussowskiego "pagórka" domieszki przy tej amplitudzie/sigmie, nie błąd. Spróbuj zmniejszyć "Rozmycie domieszki (sigma)" (np. do 0.5-0.7) albo amplitudę.');
+    }
+    if (failed.some(cr => cr.name_pl.includes('funkcj'))) {
+      reasons.push(`Rezonans↔funkcja FAIL (p=${mr.p_value !== null ? mr.p_value.toFixed(4) : '?'}): pokrycie rezonansu ze strefą docelową nie jest statystycznie lepsze niż losowe. Sprawdź, czy zaznaczony jest checkbox "Poszerz strefę docelową" — bez niego to niemal zawsze FAIL (patrz opis przy checkboxie).`);
+    }
+    if (reasons.length) {
+      banner = `<div class="banner"><b>Status ${c.overall_status}, nie PASS</b> — to często oczekiwany, uczciwie zaraportowany wynik, nie znak brakujących danych:<br>${reasons.map(r => '• ' + r).join('<br>')}</div>`;
+    }
+  }
+
   document.getElementById('results').innerHTML = `
+    ${banner}
     <div class="metrics">
       <div class="card"><div class="lbl">Atomy</div><div class="val">${d.lattice.n_atoms}</div></div>
       <div class="card"><div class="lbl">Wiązania</div><div class="val">${d.lattice.n_edges}</div></div>

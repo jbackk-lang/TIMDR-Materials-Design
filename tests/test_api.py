@@ -85,6 +85,47 @@ def test_design_with_diamond_preset_bond_length_3d():
     assert dist == pytest.approx(1.54, abs=1e-6)
 
 
+def test_design_can_reach_pass_via_api_with_widen_and_narrow_sigma_and_critical_region():
+    """Regresja na dokladnie ten problem, ktory zglosil uzytkownik: bez
+    critical_region_atoms i bez poszerzenia strefy docelowej UI/API bylo
+    strukturalnie skazane na INCOMPLETE/FAIL. Ten test dowodzi, ze z
+    kompletnymi, sensownymi danymi (widen=True, waskie dopant_sigma,
+    podana strefa krytyczna) PASS jest realnie osiagalny przez /design,
+    nie tylko przez wewnetrzne wywolanie design_material()."""
+    payload = {
+        "requirements": {"primary_function": "conductivity", "temperature_range_c": [0, 50]},
+        "lattice_size": [10, 10],
+        "dopant_atoms": [45],
+        "dopant_amplitude": 1.0,
+        "dopant_sigma": 0.6,
+        "widen_target_to_dopant_neighbors": True,
+        "critical_region_atoms": [0, 1, 2, 3],
+        "seed": 3,
+    }
+    r = client.post("/design", json=payload)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["closeout"]["overall_status"] == "PASS", body["closeout"]["summary_pl"]
+
+
+def test_design_without_critical_region_or_widen_stays_incomplete_or_fail():
+    """Dokumentuje ODWROTNA strone tego samego zachowania: bez tych
+    danych wynik jest strukturalnie ograniczony do INCOMPLETE/FAIL - to
+    JEST poprawne (kryteria 2/3 nie da sie ocenic bez critical_region),
+    nie regresja. Test pilnuje, zeby to zachowanie pozostalo udokumentowane
+    i swiadome, gdyby ktos pozniej "naprawil" to zmieniajac defaulty."""
+    payload = {
+        "requirements": {"primary_function": "conductivity", "temperature_range_c": [0, 50]},
+        "lattice_size": [10, 10],
+        "dopant_atoms": [45],
+        "seed": 3,
+    }
+    r = client.post("/design", json=payload)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["closeout"]["overall_status"] in ("INCOMPLETE", "FAIL")
+
+
 def test_health_endpoint():
     r = client.get("/health")
     assert r.status_code == 200

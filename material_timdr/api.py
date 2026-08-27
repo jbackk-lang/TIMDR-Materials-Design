@@ -88,11 +88,13 @@ class DesignRequest(BaseModel):
     defect_strength: float = 0.3
     dopant_atoms: Optional[list[int]] = None
     dopant_amplitude: float = 1.0
+    dopant_sigma: Optional[float] = None
     target_region_atoms: Optional[list[int]] = None
     critical_region_atoms: Optional[list[int]] = None
     bond_length: float = 1.0
     n_permutations: int = 2000
     seed: Optional[int] = None
+    widen_target_to_dopant_neighbors: bool = False
 
 
 # ---------------------------------------------------------------------
@@ -242,11 +244,13 @@ def design(req: DesignRequest) -> dict:
             defect_strength=req.defect_strength,
             dopant_atoms=req.dopant_atoms,
             dopant_amplitude=req.dopant_amplitude,
+            dopant_sigma=req.dopant_sigma,
             target_region_atoms=req.target_region_atoms,
             critical_region_atoms=req.critical_region_atoms,
             bond_length=req.bond_length,
             n_permutations=req.n_permutations,
             seed=req.seed,
+            widen_target_to_dopant_neighbors=req.widen_target_to_dopant_neighbors,
         )
     except ValueError as exc:
         # błędy walidacji RequirementsVector / złego rozmiaru sieci wzgledem

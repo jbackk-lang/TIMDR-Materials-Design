@@ -28,7 +28,7 @@ więc jest wywoływany osobno — pełny przykład obu razem:
 
 ```bash
 pip install -r requirements.txt
-pytest -v                                  # 112 testów
+pytest -v                                  # 120 testów
 PYTHONPATH=. python examples/demo_graphene_dopant.py
 ```
 
@@ -74,6 +74,24 @@ rzeczywistą długość wiązania i zobaczyć sieć w prawdziwej skali
 | Diament | C-C | 1.54 | sp3 / diamentowa (3D) |
 | Krzem | Si-Si | 2.35 | sp3 / diamentowa (3D) |
 | German | Ge-Ge | 2.45 | sp3 / diamentowa (3D) |
+
+**Dlaczego wynik często wychodzi FAIL/INCOMPLETE, i jak dostać PASS:**
+Krok 8 ma 4 kryteria - dwa z nich ("defekt"/"skręt nie naruszają strefy
+krytycznej") są `NOT_EVALUATED` dopóki nie podasz pola "Strefa krytyczna"
+w UI (bez tego status jest ograniczony do co najwyżej `INCOMPLETE`, nigdy
+`PASS`). Kryterium "rezonans pokrywa się z funkcją" prawie zawsze wychodzi
+`FAIL` (p=1.0), jeśli strefa docelowa to sam atom domieszki - gaussowski
+"pagórek" domieszki ma ZEROWY gradient dokładnie w swoim szczycie (stąd
+checkbox "Poszerz strefę docelową o sąsiadów domieszki", domyślnie
+zaznaczony). Kryterium "anomalia tylko w strefie docelowej" zależy od
+pola "Rozmycie domieszki (sigma)" - przy domyślnym sigmie (2x długość
+wiązania) sygnał rozlewa się szerzej niż mała strefa docelowa niemal
+zawsze; z węższym sigma (np. 0.5-0.7 dla bond_length=1.0) PASS jest
+realnie osiągalny (sprawdzone w `tests/test_pipeline.py::test_narrow_dopant_sigma_with_widened_target_can_reach_pass`
+i `tests/test_api.py::test_design_can_reach_pass_via_api_with_widen_and_narrow_sigma_and_critical_region`).
+UI pokazuje żółty baner z wyjaśnieniem, KTÓRE dane brakują/dlaczego dane
+kryterium nie przeszło, gdy status != PASS - to zazwyczaj uczciwie
+zaraportowana właściwość modelu, nie oznaka błędu czy brakujących danych.
 
 Wybór przykładu automatycznie ustawia `primary_function` na wartość
 sensowną GEOMETRYCZNIE dla tej sieci (np. h-BN, krzem i german dostają
@@ -227,7 +245,7 @@ material_timdr/
     api.py               — REST API (FastAPI) nad pipeline.design_material()
     presets.py            — przykłady prawdziwych materiałów (grafen, h-BN, diament, krzem, german) do UI/API
     static/index.html     — wizualny UI serwowany pod GET / (formularz + SVG sieci + lista przykładów)
-tests/                    — 112 testów pytest (w tym test_real_materials.py: grafen, h-BN, diament, krzem, german; test_api.py: warstwa HTTP + UI + presety)
+tests/                    — 120 testów pytest (w tym test_real_materials.py: grafen, h-BN, diament, krzem, german; test_api.py: warstwa HTTP + UI + presety + osiągalność PASS)
 examples/
     demo_graphene_dopant.py — pełny przebieg 8 kroków na jednym przykładzie
 run.bat                    — Windows: uruchamia API lokalnie (patrz sekcja "API" wyżej)
