@@ -9,6 +9,7 @@ pipeline'u.
 """
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from material_timdr.api import app
@@ -26,6 +27,62 @@ def test_root_serves_visual_ui_not_a_redirect_or_404():
     assert r.headers["content-type"].startswith("text/html")
     assert "Zaprojektuj materiał" in r.text
     assert "/design" in r.text  # strona faktycznie woła nasz endpoint API
+
+
+def test_materials_endpoint_lists_all_five_real_presets():
+    r = client.get("/materials")
+    assert r.status_code == 200
+    presets = r.json()["presets"]
+    keys = {p["key"] for p in presets}
+    assert keys == {"graphene", "h_bn", "diamond", "silicon", "germanium"}
+    graphene = next(p for p in presets if p["key"] == "graphene")
+    assert graphene["bond_length_angstrom"] == 1.42
+    assert graphene["dimensionality"] == "2D"
+    assert graphene["suggested_primary_function"] == "conductivity"
+
+
+def test_root_ui_references_materials_endpoint():
+    """Strona UI musi faktycznie wolac /materials (nie tylko /functions),
+    inaczej lista przykladow bylaby martwym elementem formularza."""
+    r = client.get("/")
+    assert "/materials" in r.text
+
+
+def test_design_with_graphene_preset_bond_length_reproduces_real_scale():
+    """Uzycie prawdziwej dlugosci wiazania grafenu (1.42 A) przez /design
+    powinno dac siec w tej samej skali - sprawdzone przez odleglosc
+    miedzy dwoma sasiednimi atomami w zwroconych pozycjach (nie ufamy
+    samej wartosci pola bond_length w odpowiedzi, mierzymy geometrie)."""
+    payload = {
+        "requirements": {"primary_function": "conductivity", "temperature_range_c": [-20, 80]},
+        "lattice_size": [6, 6],
+        "bond_length": 1.42,
+        "seed": 1,
+    }
+    r = client.post("/design", json=payload)
+    assert r.status_code == 200
+    body = r.json()
+    a, b = body["lattice"]["edges"][0]
+    pa, pb = body["lattice"]["positions"][a], body["lattice"]["positions"][b]
+    dist = sum((x - y) ** 2 for x, y in zip(pa, pb)) ** 0.5
+    assert dist == pytest.approx(1.42, abs=1e-6)
+
+
+def test_design_with_diamond_preset_bond_length_3d():
+    payload = {
+        "requirements": {"primary_function": "strength", "temperature_range_c": [0, 500]},
+        "lattice_size": [3, 3, 3],
+        "bond_length": 1.54,
+        "seed": 1,
+    }
+    r = client.post("/design", json=payload)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["lattice"]["bond_length"] == 1.54
+    a, b = body["lattice"]["edges"][0]
+    pa, pb = body["lattice"]["positions"][a], body["lattice"]["positions"][b]
+    dist = sum((x - y) ** 2 for x, y in zip(pa, pb)) ** 0.5
+    assert dist == pytest.approx(1.54, abs=1e-6)
 
 
 def test_health_endpoint():

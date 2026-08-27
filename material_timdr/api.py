@@ -40,6 +40,7 @@ from pydantic import BaseModel, Field
 
 from .requirements import RequirementsVector, PRIMARY_FUNCTIONS
 from .pipeline import design_material, MaterialDesignResult
+from .presets import REAL_MATERIAL_PRESETS
 
 app = FastAPI(
     title="TIMDR-Materials-Design API",
@@ -199,6 +200,29 @@ def health() -> dict:
 @app.get("/functions")
 def functions() -> dict:
     return {"primary_functions": list(PRIMARY_FUNCTIONS)}
+
+
+@app.get("/materials")
+def materials() -> dict:
+    """Gotowe ustawienia PRAWDZIWYCH materialow (grafen, h-BN, diament,
+    krzem, german) - patrz presets.py dla zrodla danych i zastrzezen.
+    UI (GET /) uzywa tego endpointu do wypelnienia listy przykladow, zeby
+    liczby (dlugosci wiazan) byly zdefiniowane w jednym miejscu (presets.py),
+    nie zdublowane w JS."""
+    return {
+        "presets": [
+            {
+                "key": p.key,
+                "label_pl": p.label_pl,
+                "bond_length_angstrom": p.bond_length_angstrom,
+                "known_lattice_constant_angstrom": p.known_lattice_constant_angstrom,
+                "dimensionality": p.dimensionality,
+                "suggested_primary_function": p.suggested_primary_function,
+                "note_pl": p.note_pl,
+            }
+            for p in REAL_MATERIAL_PRESETS.values()
+        ]
+    }
 
 
 @app.post("/design")

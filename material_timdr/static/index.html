@@ -48,8 +48,17 @@
 </header>
 <div class="layout">
   <div class="panel form-panel">
+    <label>Przykład materiału (opcjonalnie — realne dane)</label>
+    <select id="preset">
+      <option value="">— własna sieć (bond=1.0, bezwymiarowe) —</option>
+    </select>
+    <div class="hint" id="presetNote"></div>
+
     <label>Funkcja materiału (primary_function)</label>
     <select id="fn"></select>
+
+    <label>Długość wiązania (Å dla przykładu realnego, inaczej bezwymiarowo)</label>
+    <input id="bond" type="number" value="1.0" step="0.01" min="0.01">
 
     <label>Zakres temperatury pracy (°C)</label>
     <div class="row2">
@@ -86,16 +95,39 @@
 <script>
 const fnSelect = document.getElementById('fn');
 const n3Input = document.getElementById('n3');
+const presetSelect = document.getElementById('preset');
+const bondInput = document.getElementById('bond');
+const presetNote = document.getElementById('presetNote');
+let PRESETS = {};
 
 fetch('/functions').then(r => r.json()).then(d => {
   fnSelect.innerHTML = d.primary_functions.map(f => `<option value="${f}">${f}</option>`).join('');
   toggleDim();
 });
-fnSelect.addEventListener('change', toggleDim);
+fnSelect.addEventListener('change', () => { toggleDim(); presetSelect.value = ''; presetNote.textContent = ''; });
 function toggleDim() {
   const is3d = ['strength', 'damping', 'magnetism'].includes(fnSelect.value);
   n3Input.style.display = is3d ? 'block' : 'none';
 }
+
+// Przyklady prawdziwych materialow (grafen, h-BN, diament, krzem, german) -
+// dane z presets.py przez GET /materials, jedno zrodlo prawdy (nie
+// duplikujemy dlugosci wiazan tutaj w JS).
+fetch('/materials').then(r => r.json()).then(d => {
+  d.presets.forEach(p => { PRESETS[p.key] = p; });
+  presetSelect.innerHTML += d.presets.map(p =>
+    `<option value="${p.key}">${p.label_pl} — ${p.bond_length_angstrom} Å</option>`
+  ).join('');
+});
+presetSelect.addEventListener('change', () => {
+  const key = presetSelect.value;
+  if (!key) { presetNote.textContent = ''; return; }
+  const p = PRESETS[key];
+  bondInput.value = p.bond_length_angstrom;
+  fnSelect.value = p.suggested_primary_function;
+  toggleDim();
+  presetNote.textContent = `${p.note_pl} (cytowana stała sieciowa: ${p.known_lattice_constant_angstrom} Å)`;
+});
 
 document.getElementById('go').addEventListener('click', async () => {
   const btn = document.getElementById('go');
@@ -116,6 +148,7 @@ document.getElementById('go').addEventListener('click', async () => {
       temperature_range_c: [parseFloat(document.getElementById('tmin').value), parseFloat(document.getElementById('tmax').value)],
     },
     lattice_size,
+    bond_length: parseFloat(bondInput.value),
     dopant_atoms,
     dopant_amplitude: parseFloat(document.getElementById('amp').value),
     target_region_atoms: dopant_atoms,
@@ -177,6 +210,7 @@ function render(d) {
     <div class="metrics">
       <div class="card"><div class="lbl">Atomy</div><div class="val">${d.lattice.n_atoms}</div></div>
       <div class="card"><div class="lbl">Wiązania</div><div class="val">${d.lattice.n_edges}</div></div>
+      <div class="card"><div class="lbl">Dł. wiązania</div><div class="val">${d.lattice.bond_length}</div></div>
       <div class="card"><div class="lbl">Rezonans</div><div class="val" style="color:var(--coral)">${rez.size}</div></div>
       <div class="card"><div class="lbl">p-value (Krok 5)</div><div class="val">${mr.p_value !== null ? mr.p_value.toFixed(4) : '—'}</div></div>
       <div class="card"><div class="lbl">Status (Krok 8)</div><div class="val status-${c.overall_status}">${c.overall_status}</div></div>

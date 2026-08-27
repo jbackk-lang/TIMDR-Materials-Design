@@ -28,7 +28,7 @@ więc jest wywoływany osobno — pełny przykład obu razem:
 
 ```bash
 pip install -r requirements.txt
-pytest -v                                  # 107 testów
+pytest -v                                  # 112 testów
 PYTHONPATH=. python examples/demo_graphene_dopant.py
 ```
 
@@ -61,6 +61,28 @@ programowych dostępna osobno pod `/docs` (link w nagłówku UI), generowana
 automatycznie z modeli Pydantic w `api.py`. Zatrzymanie serwera: Ctrl+C w
 oknie konsoli.
 
+**Przykłady prawdziwych materiałów** - lista "Przykład materiału" w UI
+(zasilana przez `GET /materials`, dane z `presets.py`, te same liczby co
+w `tests/test_real_materials.py`) pozwala jednym kliknięciem ustawić
+rzeczywistą długość wiązania i zobaczyć sieć w prawdziwej skali
+(angstremy), zamiast bezwymiarowego `bond_length=1.0`:
+
+| Materiał | Wiązanie | Długość (Å) | Geometria |
+|---|---|---|---|
+| Grafen | C-C | 1.42 | sp2 / honeycomb (2D) |
+| Azotek boru h-BN | B-N | 1.45 | sp2 / honeycomb (2D) |
+| Diament | C-C | 1.54 | sp3 / diamentowa (3D) |
+| Krzem | Si-Si | 2.35 | sp3 / diamentowa (3D) |
+| German | Ge-Ge | 2.45 | sp3 / diamentowa (3D) |
+
+Wybór przykładu automatycznie ustawia `primary_function` na wartość
+sensowną GEOMETRYCZNIE dla tej sieci (np. h-BN, krzem i german dostają
+funkcję dobraną wyłącznie ze względu na tę samą geometrię co grafen/diament,
+NIE dlatego że te materiały faktycznie są używane do tej funkcji w
+praktyce - h-BN jest izolatorem, krzem/german są półprzewodnikami, nie
+materiałami konstrukcyjnymi; pełne zastrzeżenie widoczne w UI po wyborze
+i w `presets.py`).
+
 Ręcznie (Linux/macOS/Windows z Pythonem w PATH):
 ```bash
 pip install -r requirements.txt
@@ -73,6 +95,7 @@ Endpointy:
 | GET | `/` | wizualny UI (formularz + SVG sieci + wyniki) |
 | GET | `/health` | health check |
 | GET | `/functions` | lista dozwolonych `primary_function` |
+| GET | `/materials` | lista przykładów prawdziwych materiałów (grafen, h-BN, diament, krzem, german) z `presets.py` |
 | POST | `/design` | pełny pipeline `design_material()`, zwraca JSON z figurą, siecią, polem, wynikami TIMDR, mapowaniem (Krok 5) i closeoutem (Krok 8) |
 
 Przykład `POST /design`:
@@ -202,8 +225,9 @@ material_timdr/
     closeout.py          — Krok 8: checklist zamknięcia
     pipeline.py          — orkiestrator (design_material())
     api.py               — REST API (FastAPI) nad pipeline.design_material()
-    static/index.html     — wizualny UI serwowany pod GET / (formularz + SVG sieci)
-tests/                    — 108 testów pytest (w tym test_real_materials.py: grafen, h-BN, diament, krzem, german; test_api.py: warstwa HTTP + UI)
+    presets.py            — przykłady prawdziwych materiałów (grafen, h-BN, diament, krzem, german) do UI/API
+    static/index.html     — wizualny UI serwowany pod GET / (formularz + SVG sieci + lista przykładów)
+tests/                    — 112 testów pytest (w tym test_real_materials.py: grafen, h-BN, diament, krzem, german; test_api.py: warstwa HTTP + UI + presety)
 examples/
     demo_graphene_dopant.py — pełny przebieg 8 kroków na jednym przykładzie
 run.bat                    — Windows: uruchamia API lokalnie (patrz sekcja "API" wyżej)
