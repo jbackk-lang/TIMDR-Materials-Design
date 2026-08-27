@@ -13,7 +13,7 @@ z testami weryfikującymi, że robi to, co deklaruje.
 | 1. Wektor wymagań | Funkcja materiału + warunki brzegowe, jako struktura danych | `requirements.py` |
 | 2. Figury atomowe | sp2/sp3/liniowa, kąty policzone z geometrii, heurystyka funkcja→figura | `figures.py` |
 | 3. Sieć + pole sygnału | Generatory sieci (honeycomb sp2, diamond sp3) + pola per-atom | `lattice.py`, `field.py` |
-| 4. TIMDR na polu | anomalia/defekt/skręt/rezonans, generalizacja na graf przestrzenny | `spatial_timdr.py` |
+| 4. TIMDR na polu | anomalia/defekt/skręt/rezonans, generalizacja na graf przestrzenny | `spatial_timdr.py`, `steinhardt.py` (Q4/Q6 dla sieci 3D) |
 | 5. Rezonans → funkcja | Test permutacyjny (null-model), nie surowe pokrycie | `mapping.py` |
 | 6. Synteza | Heurystyki z literatury (temperatura/chłodzenie/ciśnienie) | `synthesis.py` |
 | 7. Walidacja na pomiarach | Ten sam silnik na zmierzonych danych, porównanie z projektem | `validate.py` |
@@ -28,7 +28,7 @@ więc jest wywoływany osobno — pełny przykład obu razem:
 
 ```bash
 pip install -r requirements.txt
-pytest -v                                  # 78 testów
+pytest -v                                  # 85 testów
 PYTHONPATH=. python examples/demo_graphene_dopant.py
 ```
 
@@ -94,10 +94,18 @@ zwalidowane narzędzie predykcyjne dla prawdziwych materiałów. Konkretnie:
   momentu magnetycznego (fizyka spinów d/f, poza zakresem tej geometrycznej
   ramy).
 - Orientacja/skręt (Krok 4) jest zaimplementowana TYLKO dla sieci 2D
-  (honeycomb/sp2). Analogiczny niezmiennik dla sieci 3D (diamond/sp3)
-  wymagałby sferycznych parametrów porządku (Steinhardt Q4/Q6) — poza
-  zakresem tego repo. `SpatialTIMDR` poprawnie pomija skręt dla sieci 3D
-  (brak pola `orientation_deg`), nie udaje że go liczy.
+  (honeycomb/sp2) — `SpatialTIMDR` poprawnie pomija skręt dla sieci 3D
+  (brak pola `orientation_deg`), nie udaje że go liczy. Sieci 3D (diamond)
+  dostają zamiast tego **Q4/Q6** (`steinhardt.py`) — standardowe parametry
+  porządku Steinhardta z harmonik sferycznych, zweryfikowane bezpośrednio
+  (nie z pamięci): stałe na całej idealnej sieci, rotacyjnie niezmiennicze
+  (sprawdzone przez faktyczny obrót testowej sieci), i realnie różne w
+  atomie sąsiadującym z defektem. **To NIE jest pełny odpowiednik
+  orientacji/skrętu** — Q4/Q6 to skalar ("jak bardzo lokalne otoczenie
+  wygląda jak idealne"), nie kąt domeny, więc trafiają do `anomalia()`/
+  `defekt()` (jako kolejne pole per-atom, tak jak `bond_length_dev`), a
+  NIE do `skret()`, który wciąż wymaga kierunkowej/kątowej semantyki
+  dostępnej tylko w 2D.
 - Demo (`examples/demo_graphene_dopant.py`) CELOWO kończy się statusem
   `FAIL` na Kroku 8, nie `PASS` — i to jest zamierzone, nie błąd: pokazuje
   rzeczywistą właściwość gładkiego "pagórka" domieszki (gaussowski
@@ -122,12 +130,13 @@ material_timdr/
     lattice.py          — Krok 2/3: generatory sieci (honeycomb_lattice, diamond_lattice)
     field.py            — Krok 3: pole sygnału (build_signal_field)
     spatial_timdr.py    — Krok 4: anomalia/defekt/skręt/rezonans na grafie (SpatialTIMDR)
+    steinhardt.py        — Krok 4 (sieci 3D): Q4/Q6 z harmonik sferycznych
     mapping.py          — Krok 5: test permutacyjny rezonans<->funkcja
     synthesis.py        — Krok 6: heurystyki syntezy
     validate.py          — Krok 7: walidacja na zmierzonych danych
     closeout.py          — Krok 8: checklist zamknięcia
     pipeline.py          — orkiestrator (design_material())
-tests/                    — 78 testów pytest
+tests/                    — 85 testów pytest
 examples/
     demo_graphene_dopant.py — pełny przebieg 8 kroków na jednym przykładzie
 ```

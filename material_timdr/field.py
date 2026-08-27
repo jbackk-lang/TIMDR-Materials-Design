@@ -63,6 +63,7 @@ from dataclasses import dataclass, field as dc_field
 import numpy as np
 
 from .lattice import Lattice
+from .steinhardt import add_steinhardt_fields
 
 
 @dataclass
@@ -190,6 +191,13 @@ def build_signal_field(
     }
     if is_2d:
         params["orientation_deg"] = orientation_deg
+    else:
+        # sieci 3D nie maja orientation_deg (patrz wyzej) - zamiast tego
+        # dostaja Q4/Q6 (steinhardt.py), analogiczny co do roli substrat
+        # dla anomalia()/defekt() w spatial_timdr.py, ale skalarny
+        # (rotacyjnie niezmienniczy), nie katowy - NIE zastepuje skretu,
+        # patrz README "Zakres i ograniczenia"
+        add_steinhardt_fields(params, perturbed)
 
     return SignalField(
         lattice=perturbed,

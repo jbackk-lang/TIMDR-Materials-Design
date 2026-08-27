@@ -26,6 +26,7 @@ def test_strength_pipeline_uses_diamond_3d_lattice():
     assert result.figure_suggestion.base_figure.name == "sp3_tetrahedral"
     assert result.field.lattice.positions.shape[1] == 3
     assert "orientation_deg" not in result.field.params  # 3D - brak skretu
+    assert "q4" in result.field.params and "q6" in result.field.params  # ale ma Q4/Q6
 
 
 def test_wrong_dimensionality_lattice_size_raises():
