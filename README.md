@@ -28,7 +28,7 @@ więc jest wywoływany osobno — pełny przykład obu razem:
 
 ```bash
 pip install -r requirements.txt
-pytest -v                                  # 85 testów
+pytest -v                                  # 99 testów
 PYTHONPATH=. python examples/demo_graphene_dopant.py
 ```
 
@@ -59,6 +59,19 @@ zwalidowane narzędzie predykcyjne dla prawdziwych materiałów. Konkretnie:
 - Test w Kroku 5 (mapping.py) to prawdziwy test permutacyjny z modelem
   null (ten sam protokół co w skillu `timdr-signal-framework` §13/§18) —
   nie surowe "ile się pokrywa", tylko "czy to więcej niż przypadek".
+- Generatory sieci sprawdzone dodatkowo na PRAWDZIWYCH danych materiałowych
+  (`tests/test_real_materials.py`): grafen (C-C 1.42 Å), azotek boru h-BN
+  (B-N 1.45 Å), diament (C-C 1.54 Å), krzem (Si-Si 2.35 Å), german
+  (Ge-Ge 2.45 Å) — długości wiązań to standardowe, ustalone stałe
+  krystalograficzne (dane wejściowe, nie coś liczonego przez ten kod).
+  Stała sieciowa wyliczona z tych długości zgadza się z powszechnie
+  cytowaną wartością dla każdego materiału z dokładnością do ~1-2%
+  (rozbieżność tego rzędu jest oczekiwana — model tu to sztywna,
+  idealizowana geometria, nie symulacja DFT/MD z relaksacją sieci).
+  Osobny test odtwarza znaną wakancję punktową w grafenie i w krzemie i
+  potwierdza, że `SpatialTIMDR`/Q4/Q6 faktycznie ją wykrywają przy
+  rzeczywistej skali długości (angstremy), nie tylko w bezwymiarowych
+  jednostkach testowych.
 - Trzy realne błędy numeryczne znalezione i naprawione W TRAKCIE budowy
   tego repo (nie teoretyczne, złapane przez własne testy):
   1. Podsieci A/B sieci honeycomb są przesunięte o 60° nawet w idealnej,
@@ -136,7 +149,7 @@ material_timdr/
     validate.py          — Krok 7: walidacja na zmierzonych danych
     closeout.py          — Krok 8: checklist zamknięcia
     pipeline.py          — orkiestrator (design_material())
-tests/                    — 85 testów pytest
+tests/                    — 99 testów pytest (w tym test_real_materials.py: grafen, h-BN, diament, krzem, german)
 examples/
     demo_graphene_dopant.py — pełny przebieg 8 kroków na jednym przykładzie
 ```
