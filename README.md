@@ -212,13 +212,21 @@ zwalidowane narzędzie predykcyjne dla prawdziwych materiałów. Konkretnie:
   `defekt()` (jako kolejne pole per-atom, tak jak `bond_length_dev`), a
   NIE do `skret()`, który wciąż wymaga kierunkowej/kątowej semantyki
   dostępnej tylko w 2D.
-- Demo (`examples/demo_graphene_dopant.py`) CELOWO kończy się statusem
-  `FAIL` na Kroku 8, nie `PASS` — i to jest zamierzone, nie błąd: pokazuje
-  rzeczywistą właściwość gładkiego "pagórka" domieszki (gaussowski
-  rozkład), gdzie strefa `anomalia` jest szersza niż wąska strefa docelowa.
-  Wynik nie został naciągnięty zmianą progów, żeby ładnie wyglądał w
-  demo — dokładnie to (uczciwe raportowanie negatywnego/niejednoznacznego
-  wyniku) jest standardem trzymanym w całym tym ekosystemie repozytoriów.
+- Demo (`examples/demo_graphene_dopant.py`) uruchamia DWA przebiegi na tej
+  samej sieci/domieszce, jako jawna kontrola: **KONTROLA** (naiwna
+  konfiguracja — target_region = sam atom domieszki, domyślne
+  `dopant_sigma`) kończy się `FAIL` na Kroku 8 — to realna, sprawdzalna
+  właściwość gładkiego gaussowskiego "pagórka" domieszki (jego dyskretny
+  gradient jest zerowy dokładnie w szczycie, więc rezonans tworzy
+  pierścień WOKÓŁ szczytu, nie sam szczyt), nie błąd kodu. **PO POPRAWCE**
+  (ten sam atom domieszki, ale `widen_target_to_dopant_neighbors=True` +
+  węższe `dopant_sigma`) kończy się `PASS` — z wydrukiem
+  kryterium-po-kryterium pokazującym DOKŁADNIE, co się zmieniło między
+  tymi dwoma przebiegami. Żaden z wyników nie został naciągnięty zmianą
+  progów w `closeout.py` — obie konfiguracje używają tych samych,
+  domyślnych tolerancji; różnica wynika wyłącznie z parametrów wejściowych
+  (patrz `pipeline.py`, docstring `design_material()`, i sekcja niżej
+  "Dlaczego wynik często wychodzi FAIL/INCOMPLETE, i jak dostać PASS").
 
 **Jedno zdanie podsumowania, uczciwie:** to repo automatyzuje PRZEPŁYW
 informacji między ośmioma krokami projektowania materiału i dostarcza
