@@ -28,7 +28,7 @@ więc jest wywoływany osobno — pełny przykład obu razem:
 
 ```bash
 pip install -r requirements.txt
-pytest -v                                  # 120 testów
+pytest -v                                  # 130 testów
 PYTHONPATH=. python examples/demo_graphene_dopant.py
 ```
 
@@ -92,6 +92,11 @@ i `tests/test_api.py::test_design_can_reach_pass_via_api_with_widen_and_narrow_s
 UI pokazuje żółty baner z wyjaśnieniem, KTÓRE dane brakują/dlaczego dane
 kryterium nie przeszło, gdy status != PASS - to zazwyczaj uczciwie
 zaraportowana właściwość modelu, nie oznaka błędu czy brakujących danych.
+Zamiast ręcznie dobierać te wartości, UI woła `GET /suggest_demo_params`
+przy starcie i po każdej zmianie funkcji/przykładu materiału - endpoint
+liczy je na PRAWDZIWIE wygenerowanej sieci (nie na zgadywaniu po indeksie)
+i wypełnia puste pola domieszki/strefy krytycznej/sigma automatycznie;
+pola wypełnione ręcznie przez użytkownika nie są nadpisywane.
 
 Wybór przykładu automatycznie ustawia `primary_function` na wartość
 sensowną GEOMETRYCZNIE dla tej sieci (np. h-BN, krzem i german dostają
@@ -114,6 +119,7 @@ Endpointy:
 | GET | `/health` | health check |
 | GET | `/functions` | lista dozwolonych `primary_function` |
 | GET | `/materials` | lista przykładów prawdziwych materiałów (grafen, h-BN, diament, krzem, german) z `presets.py` |
+| GET | `/suggest_demo_params` | liczy na PRAWDZIWIE wygenerowanej sieci (nie zgaduje) sensowny atom domieszki + strefę krytyczną + sigma; UI wywołuje to automatycznie i wypełnia puste pola |
 | POST | `/design` | pełny pipeline `design_material()`, zwraca JSON z figurą, siecią, polem, wynikami TIMDR, mapowaniem (Krok 5) i closeoutem (Krok 8) |
 
 Przykład `POST /design`:
@@ -183,6 +189,23 @@ zwalidowane narzędzie predykcyjne dla prawdziwych materiałów. Konkretnie:
      czysto z szumu zmiennoprzecinkowego (różnice rzędu 1e-16 dawały
      "trzysigmowe" wyniki, bo i licznik, i mianownik z-score były tego
      samego, astronomicznie małego rzędu wielkości).
+  4. Warunek brzegowy dla Q4/Q6 na sieciach 3D: filtrowanie atomów po
+     samej koordynacji (`coordination(i) == 4`) NIE wystarcza, żeby
+     wybrać prawdziwe atomy "bulk" (wewnętrzne) skończonej sieci
+     diamentowej - atom może mieć pełną koordynację, a mimo to być
+     bezpośrednio związany z atomem brzegowym (o niższej koordynacji),
+     co silnie zniekształca sumę harmonik sferycznych Q4/Q6 (na idealnej,
+     niezaburzonej sieci `diamond_lattice(6,6,3)` dawało to 28 fałszywych
+     alarmów `anomalia()` i 464 fałszywych alarmów `defekt()` na polach
+     q4/q6 - przy ZEROWEJ domieszce i ZEROWYM defekcie). Naprawione przez
+     `Lattice.bulk_mask()` (atom I wszyscy jego sąsiedzi muszą mieć pełną
+     koordynację) i parametr `population_mask` w `anomalia()`/`defekt()`,
+     stosowany tylko do pól q4/q6 przez `SpatialTIMDR.BOUNDARY_SENSITIVE_FIELDS`
+     - po poprawce: dokładnie 0 fałszywych alarmów (`tests/test_spatial_timdr.py::test_diamond_ideal_lattice_q4_q6_have_zero_false_flags_after_boundary_fix`).
+     Sprawdzona alternatywa (wymaganie zgodności q4∧q6 przez `rezonans()`)
+     NIE działa - zniekształcenie brzegowe jest niemal idealnie skorelowane
+     między q4 i q6 (te same 28/464 atomów w obu polach), więc filtr
+     koincydencji nic nie odsiewa.
 
 **Czego to NIE dowodzi:**
 - Że "rezonans TIMDR" odpowiada jakiejkolwiek realnej własności fizycznej
@@ -211,7 +234,11 @@ zwalidowane narzędzie predykcyjne dla prawdziwych materiałów. Konkretnie:
   wygląda jak idealne"), nie kąt domeny, więc trafiają do `anomalia()`/
   `defekt()` (jako kolejne pole per-atom, tak jak `bond_length_dev`), a
   NIE do `skret()`, który wciąż wymaga kierunkowej/kątowej semantyki
-  dostępnej tylko w 2D.
+  dostępnej tylko w 2D. Do niedawna sieci 3D były strukturalnie skazane na
+  `FAIL` niezależnie od parametrów, z powodu błędu warunku brzegowego
+  opisanego w punkcie 4 wyżej ("Co jest tu solidnie ugruntowane") - po
+  poprawce `Lattice.bulk_mask()` PASS jest realnie osiągalny również dla
+  diamentu (`tests/test_pipeline.py::test_diamond_dopant_scenario_can_reach_pass_after_boundary_condition_fix`).
 - Demo (`examples/demo_graphene_dopant.py`) uruchamia DWA przebiegi na tej
   samej sieci/domieszce, jako jawna kontrola: **KONTROLA** (naiwna
   konfiguracja — target_region = sam atom domieszki, domyślne
@@ -253,7 +280,7 @@ material_timdr/
     api.py               — REST API (FastAPI) nad pipeline.design_material()
     presets.py            — przykłady prawdziwych materiałów (grafen, h-BN, diament, krzem, german) do UI/API
     static/index.html     — wizualny UI serwowany pod GET / (formularz + SVG sieci + lista przykładów)
-tests/                    — 120 testów pytest (w tym test_real_materials.py: grafen, h-BN, diament, krzem, german; test_api.py: warstwa HTTP + UI + presety + osiągalność PASS)
+tests/                    — 130 testów pytest (w tym test_real_materials.py: grafen, h-BN, diament, krzem, german; test_api.py: warstwa HTTP + UI + presety + osiągalność PASS; test_lattice.py/test_spatial_timdr.py: Lattice.bulk_mask() i poprawka warunku brzegowego Q4/Q6)
 examples/
     demo_graphene_dopant.py — pełny przebieg 8 kroków na jednym przykładzie
 run.bat                    — Windows: uruchamia API lokalnie (patrz sekcja "API" wyżej)

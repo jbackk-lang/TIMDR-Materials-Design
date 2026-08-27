@@ -72,6 +72,34 @@ class Lattice:
                 angles.append(math.degrees(math.acos(cos_t)))
         return angles
 
+    def bulk_mask(self, target_coordination: int | None = None) -> np.ndarray:
+        """Maska atomów WEWNĘTRZNYCH (bulk) sieci - bool array (n_atoms,).
+
+        WARUNEK BRZEGOWY (odkryty przy debugowaniu fałszywych sygnałów Q4/Q6
+        na sieci diamentowej, patrz spatial_timdr.py BOUNDARY_SENSITIVE_FIELDS):
+        sam warunek `coordination(i) == target_coordination` NIE WYSTARCZA,
+        żeby uznać atom za "wewnętrzny"/reprezentatywny dla bulk. Atom może
+        mieć pełną koordynację, a i tak być bezpośrednim sąsiadem PRAWDZIWEGO
+        atomu brzegowego (skończona, nieperiodyczna sieć) - a pola liczone z
+        GEOMETRII SĄSIEDZTWA (np. Q4/Q6 w steinhardt.py, suma harmonik
+        sferycznych po sąsiadach) są wtedy nadal skażone, bo ten sąsiad ma
+        NIEPEŁNĄ koordynację i zniekształconą lokalną geometrię. Stąd
+        warunek jest DWUSTOPNIOWY: atom I WSZYSCY jego sąsiedzi muszą mieć
+        pełną koordynację. Zweryfikowane bezpośrednio: na diamond_lattice(6,6,3)
+        naiwny warunek (tylko coordination(i)==4) daje 605/864 "wewnętrznych"
+        atomów, z czego 205 wciąż dotyka prawdziwej krawędzi (ma sąsiada o
+        coordination!=4) i ma Q4 odjeżdżające od wartości bulk (0.509->1.0);
+        ten dwustopniowy warunek daje 400/864 atomów, wszystkie z Q4==bulk
+        dokładnie (patrz tests/test_lattice.py)."""
+        target = target_coordination if target_coordination is not None else self.figure.coordination
+        mask = np.zeros(self.n_atoms, dtype=bool)
+        for i in range(self.n_atoms):
+            if self.coordination(i) != target:
+                continue
+            if all(self.coordination(j) == target for j in self.neighbor_lists[i]):
+                mask[i] = True
+        return mask
+
 
 def _edges_from_distance(positions: np.ndarray, bond_length: float, tol: float = 0.15) -> list[tuple[int, int]]:
     """Buduje krawędzie łącząc pary atomów w odległości bond_length*(1±tol),

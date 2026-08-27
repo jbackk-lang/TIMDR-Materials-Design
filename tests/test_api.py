@@ -126,6 +126,53 @@ def test_design_without_critical_region_or_widen_stays_incomplete_or_fail():
     assert body["closeout"]["overall_status"] in ("INCOMPLETE", "FAIL")
 
 
+def test_suggest_demo_params_returns_true_bulk_atom_not_edge():
+    r = client.get("/suggest_demo_params", params={
+        "primary_function": "strength", "lattice_size": "6,6,3", "bond_length": 1.54,
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert body["n_atoms"] == 864
+    assert body["n_bulk_atoms"] == 400  # patrz test_lattice.py::test_bulk_mask_diamond_excludes...
+    assert len(body["critical_region"]) == 4
+    assert body["suggested_dopant_sigma"] == pytest.approx(0.77)
+
+
+def test_suggest_demo_params_then_design_reaches_pass_end_to_end():
+    """Caly przeplyw, jakiego uzywa UI: /suggest_demo_params -> wypelnij
+    pola -> POST /design. Musi realnie dawac PASS, nie tylko teoretycznie
+    (to jest dokladnie to, co zglosil uzytkownik jako niedzialajace -
+    wybor przykladu materialu i klikniecie 'Zaprojektuj' konczylo sie
+    FAIL/INCOMPLETE z powodu zlego doboru atomu domieszki/strefy)."""
+    suggestion = client.get("/suggest_demo_params", params={
+        "primary_function": "strength", "lattice_size": "6,6,3", "bond_length": 1.54,
+    }).json()
+
+    payload = {
+        "requirements": {"primary_function": "strength", "temperature_range_c": [0, 500]},
+        "lattice_size": [6, 6, 3],
+        "bond_length": 1.54,
+        "dopant_atoms": [suggestion["dopant_atom"]],
+        "dopant_amplitude": suggestion["suggested_dopant_amplitude"],
+        "dopant_sigma": suggestion["suggested_dopant_sigma"],
+        "widen_target_to_dopant_neighbors": True,
+        "critical_region_atoms": suggestion["critical_region"],
+        "n_permutations": 1000,
+        "seed": 1,
+    }
+    r = client.post("/design", json=payload)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["closeout"]["overall_status"] == "PASS", body["closeout"]["summary_pl"]
+
+
+def test_suggest_demo_params_too_small_lattice_returns_400_not_500():
+    r = client.get("/suggest_demo_params", params={
+        "primary_function": "strength", "lattice_size": "1,1,1", "bond_length": 1.0,
+    })
+    assert r.status_code == 400
+
+
 def test_health_endpoint():
     r = client.get("/health")
     assert r.status_code == 200

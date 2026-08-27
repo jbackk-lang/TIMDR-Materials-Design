@@ -38,7 +38,10 @@ from .field import SignalField
 from .lattice import Lattice
 
 
-def anomalia(values: np.ndarray, factor: float = 3.0, floor_frac: float = 0.05) -> tuple[np.ndarray, np.ndarray]:
+def anomalia(
+    values: np.ndarray, factor: float = 3.0, floor_frac: float = 0.05,
+    population_mask: np.ndarray | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
     """MAD z-score względem CAŁEJ populacji atomów - ta sama logika co
     timdr_core.core.TIMDRCore.anomalies(), Z JEDNYM DODATKOWYM
     zabezpieczeniem: `mad == 0` NIE WYSTARCZY jako warunek fallbacku na
@@ -50,20 +53,34 @@ def anomalia(values: np.ndarray, factor: float = 3.0, floor_frac: float = 0.05) 
     fałszywie flagują idealną, bezdefektową sieć jako mającą anomalie
     (złapane w tests/test_spatial_timdr.py na honeycomb_lattice() bez
     żadnych defect_atoms - patrz _robust_spread() powyżej po ten sam
-    wzorzec zastosowany do defekt()/skret())."""
-    s = np.asarray(values, float)
-    n = len(s)
+    wzorzec zastosowany do defekt()/skret()).
+
+    population_mask: gdy podany, i próg (mediana/MAD), i sama możliwość
+    flagowania są OGRANICZONE do atomów mask==True - atomy poza maską
+    dostają z=NaN i nigdy nie trafiają do idx. Domyślnie None = cała
+    populacja (bez zmiany zachowania względem poprzednich wersji). Patrz
+    SpatialTIMDR.analyze(), BOUNDARY_SENSITIVE_FIELDS - powód istnienia
+    tego parametru to pola typu Q4/Q6 (steinhardt.py), gdzie atomy
+    brzegowe skończonej sieci mają STRUKTURALNIE inną wartość (nie
+    defekt, tylko efekt obcięcia sąsiedztwa) i zalewałyby wynik."""
+    s_full = np.asarray(values, float)
+    n = len(s_full)
     if n == 0:
         return np.array([], dtype=int), np.array([])
-    scale = float(np.max(np.abs(s)))
+    mask = population_mask if population_mask is not None else np.ones(n, dtype=bool)
+    pop = s_full[mask]
+    if len(pop) == 0:
+        return np.array([], dtype=int), np.full(n, np.nan)
+    scale = float(np.max(np.abs(pop)))
     eps = max(scale, 1.0) * 1e-9
-    med = np.median(s)
-    mad = np.median(np.abs(s - med)) * 1.4826
+    med = np.median(pop)
+    mad = np.median(np.abs(pop - med)) * 1.4826
     if mad <= eps or not np.isfinite(mad):
-        std = np.std(s)
+        std = np.std(pop)
         mad = std if std > eps and np.isfinite(std) else max(abs(med) * floor_frac, 1e-9)
-    z = (s - med) / mad
-    idx = np.where(np.abs(z) > factor)[0]
+    z = np.full(n, np.nan)
+    z[mask] = (s_full[mask] - med) / mad
+    idx = np.where(mask & (np.abs(np.nan_to_num(z, nan=0.0)) > factor))[0]
     return idx, z
 
 
@@ -99,20 +116,37 @@ def _robust_spread(s: np.ndarray, floor_frac: float) -> float:
     return max(abs(np.median(s)) * floor_frac, 1e-9)
 
 
-def defekt(values: np.ndarray, lattice: Lattice, factor: float = 0.3, floor_frac: float = 0.05) -> tuple[np.ndarray, dict[tuple[int, int], float]]:
+def defekt(
+    values: np.ndarray, lattice: Lattice, factor: float = 0.3, floor_frac: float = 0.05,
+    population_mask: np.ndarray | None = None,
+) -> tuple[np.ndarray, dict[tuple[int, int], float]]:
     """Skok między SĄSIADAMI W GRAFIE (Lattice.edges) - próg z rozrzutu
     p90-p10 całego pola (patrz _robust_spread powyżej dla zero-inflacji).
     Zwraca (posortowane unikalne indeksy atomów incydentnych do 'zerwanej'
-    krawędzi, {krawędź: |różnica|})."""
+    krawędzi, {krawędź: |różnica|}).
+
+    population_mask: gdy podany, próg liczony jest z rozrzutu WYŁĄCZNIE
+    atomów mask==True, a krawędzie dotykające choćby jednego atomu spoza
+    maski są całkowicie pomijane (nie wchodzą do progu ani do wyniku).
+    Domyślnie None = cała populacja/wszystkie krawędzie (bez zmiany
+    zachowania). Patrz anomalia() i SpatialTIMDR.analyze() -
+    BOUNDARY_SENSITIVE_FIELDS, po pełne uzasadnienie (pola typu Q4/Q6 mają
+    STRUKTURALNIE różną wartość na atomach brzegowych skończonej sieci -
+    to nie defekt, tylko efekt obciętego sąsiedztwa, patrz
+    Lattice.bulk_mask())."""
     s = np.asarray(values, float)
     n = len(s)
     if n < 2 or not lattice.edges:
         return np.array([], dtype=int), {}
-    thr = factor * _robust_spread(s, floor_frac)
+    mask = population_mask if population_mask is not None else np.ones(n, dtype=bool)
+    pop_vals = s[mask]
+    thr = factor * _robust_spread(pop_vals, floor_frac) if len(pop_vals) else float("inf")
 
     edge_diffs: dict[tuple[int, int], float] = {}
     flagged: set[int] = set()
     for i, j in lattice.edges:
+        if not (mask[i] and mask[j]):
+            continue  # krawedz dotyka atomu spoza populacji (np. brzegowego) - pomijamy calkowicie
         d = abs(s[i] - s[j])
         edge_diffs[(i, j)] = float(d)
         if d > thr:
@@ -168,6 +202,22 @@ class SpatialTIMDR:
     """Wygodny pipeline: SignalField -> anomalia/defekt/skręt/rezonans dla
     wszystkich pól naraz, analogicznie do TIMDRCore.analyze_multi()."""
 
+    # Pola, dla ktorych populacja anomalia()/defekt() jest ograniczana do
+    # atomow BULK (Lattice.bulk_mask()) zamiast calej sieci. ODKRYTE
+    # empirycznie (nie teoretycznie): na diamond_lattice(6,6,3) BEZ
+    # zadnego dopant/defect, anomalia(q4) flagowala 28 atomow a defekt(q4)
+    # az 464/864 (!) - atomy brzegowe skonczonej (nieperiodycznej) sieci
+    # maja STRUKTURALNIE inna wartosc Q4/Q6 (suma harmonik sferycznych po
+    # OBCIETYM sasiedztwie), nie dlatego, ze cos jest 'zepsute'. Sprawdzone
+    # tez, ze samo wymaganie koincydencji miedzy q4 i q6 (rezonans) TEGO
+    # NIE FILTRUJE - oba pola sa niemal identycznie skorelowane (ten sam
+    # mechanizm obciecia), wiec 'rezonans' miedzy nimi tylko potwierdza
+    # falszywy sygnal, nie usuwa go (patrz tests/test_spatial_timdr.py).
+    # bond_length_dev/bond_angle_dev NIE maja tego problemu (usredniaja
+    # sie po dostepnych wiazaniach, nie zakladaja z gory ich liczby), wiec
+    # nie sa tu wlaczone.
+    BOUNDARY_SENSITIVE_FIELDS = frozenset({"q4", "q6"})
+
     def __init__(
         self,
         anomaly_factor: float = 3.0,
@@ -206,6 +256,8 @@ class SpatialTIMDR:
         coord = field.lattice.figure.coordination
         sym = 360.0 / (2 * coord) if coord > 0 else 360.0
 
+        bulk_mask = None  # liczona leniwie, tylko jesli faktycznie potrzebna
+
         anomaly_idx: dict[str, np.ndarray] = {}
         defekt_idx: dict[str, np.ndarray] = {}
         for name, vals in field.params.items():
@@ -215,9 +267,14 @@ class SpatialTIMDR:
                 # roznica bezwzgledna) nie sa dla niego poprawne, patrz
                 # skret() ponizej, ktory jest jedynym wlasciwym detektorem
                 continue
-            a_idx, _ = anomalia(vals, factor=self.anomaly_factor, floor_frac=self.floor_frac)
+            mask = None
+            if name in self.BOUNDARY_SENSITIVE_FIELDS:
+                if bulk_mask is None:
+                    bulk_mask = field.lattice.bulk_mask()
+                mask = bulk_mask
+            a_idx, _ = anomalia(vals, factor=self.anomaly_factor, floor_frac=self.floor_frac, population_mask=mask)
             anomaly_idx[name] = a_idx
-            d_idx, _ = defekt(vals, field.lattice, factor=self.defekt_factor, floor_frac=self.floor_frac)
+            d_idx, _ = defekt(vals, field.lattice, factor=self.defekt_factor, floor_frac=self.floor_frac, population_mask=mask)
             defekt_idx[name] = d_idx
 
         if "orientation_deg" in field.params:

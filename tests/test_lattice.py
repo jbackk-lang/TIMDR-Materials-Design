@@ -6,6 +6,44 @@ import pytest
 from material_timdr.lattice import honeycomb_lattice, diamond_lattice
 
 
+def test_bulk_mask_diamond_excludes_atoms_touching_true_edge():
+    """Regresja na realny bug znaleziony przy debugowaniu falszywych
+    sygnalow Q4/Q6 (spatial_timdr.py, BOUNDARY_SENSITIVE_FIELDS): sam
+    warunek coordination(i)==4 daje 605/864 atomow na diamond_lattice(6,6,3),
+    ale 205 z nich wciaz dotyka PRAWDZIWEJ krawedzi (ma sasiada o
+    coordination!=4) - bulk_mask() musi te 205 wykluczyc."""
+    dia = diamond_lattice(6, 6, 3, bond_length=1.54)
+    naive_interior = {i for i in range(dia.n_atoms) if dia.coordination(i) == 4}
+    bulk = set(np.where(dia.bulk_mask())[0].tolist())
+
+    assert len(naive_interior) == 605
+    assert bulk < naive_interior  # scisly podzbior, nie to samo
+    assert len(bulk) == 400
+
+    # kazdy atom w bulk musi miec WSZYSTKICH sasiadow tez w bulk-koordynacji
+    for i in bulk:
+        assert dia.coordination(i) == 4
+        for j in dia.neighbor_lists[i]:
+            assert dia.coordination(j) == 4
+
+
+def test_bulk_mask_honeycomb_basic_sanity():
+    hc = honeycomb_lattice(n1=8, n2=8, bond_length=1.0)
+    naive_interior = {i for i in range(hc.n_atoms) if hc.coordination(i) == 3}
+    bulk = set(np.where(hc.bulk_mask())[0].tolist())
+    assert bulk <= naive_interior
+    assert len(bulk) > 0  # 8x8 jest wystarczajaco duza, zeby cos zostalo
+
+
+def test_bulk_mask_too_small_lattice_can_be_empty():
+    """Bardzo mala siatka moze nie miec ZADNYCH prawdziwie 'bulk' atomow -
+    bulk_mask() musi to zwrocic jako pusta maske, nie wywalic wyjatkiem."""
+    dia = diamond_lattice(1, 1, 1, bond_length=1.0)
+    mask = dia.bulk_mask()
+    assert mask.shape == (dia.n_atoms,)
+    assert mask.dtype == bool
+
+
 def test_honeycomb_interior_atoms_have_coordination_3():
     hc = honeycomb_lattice(n1=6, n2=6, bond_length=1.0)
     coords = [hc.coordination(i) for i in range(hc.n_atoms)]

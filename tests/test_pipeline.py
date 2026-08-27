@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from material_timdr import RequirementsVector, design_material
-from material_timdr.lattice import honeycomb_lattice
+from material_timdr.lattice import honeycomb_lattice, diamond_lattice
 
 
 def test_conductivity_pipeline_end_to_end_runs_without_error():
@@ -122,6 +122,31 @@ def test_narrow_dopant_sigma_with_widened_target_can_reach_pass():
         widen_target_to_dopant_neighbors=True,
         critical_region_atoms=interior[:4],
         seed=3,
+    )
+    assert result.closeout.overall_status == "PASS", result.closeout.summary_pl
+
+
+def test_diamond_dopant_scenario_can_reach_pass_after_boundary_condition_fix():
+    """Przed poprawka warunku brzegowego (Lattice.bulk_mask(),
+    SpatialTIMDR.BOUNDARY_SENSITIVE_FIELDS) sieci 3D (diament/krzem/german)
+    byly STRUKTURALNIE skazane na FAIL niezaleznie od dopant_amplitude/sigma -
+    fale Q4/Q6 na atomach brzegowych skonczonej sieci zalewaly wynik.
+    Ten test dowodzi, ze PASS jest teraz realnie osiagalny rowniez dla
+    sieci 3D, nie tylko 2D (patrz test_narrow_dopant_sigma_with_widened_target_can_reach_pass
+    dla analogicznego testu na honeycomb)."""
+    dia = diamond_lattice(6, 6, 3, bond_length=1.54)
+    bulk = np.where(dia.bulk_mask())[0].tolist()
+    assert len(bulk) >= 4, "siatka za mala do sensownego testu"
+    dopant = bulk[len(bulk) // 2]
+    critical = bulk[:4]
+
+    req = RequirementsVector(primary_function="strength", temperature_range_c=(0, 500))
+    result = design_material(
+        req, lattice_size=(6, 6, 3), bond_length=1.54,
+        dopant_atoms=[dopant], dopant_amplitude=1.0, dopant_sigma=0.5 * 1.54,
+        widen_target_to_dopant_neighbors=True,
+        critical_region_atoms=critical,
+        n_permutations=1000, seed=1,
     )
     assert result.closeout.overall_status == "PASS", result.closeout.summary_pl
 

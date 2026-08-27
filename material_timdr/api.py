@@ -39,6 +39,8 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from .requirements import RequirementsVector, PRIMARY_FUNCTIONS
+from .figures import suggest_figure
+from .lattice import honeycomb_lattice, diamond_lattice
 from .pipeline import design_material, MaterialDesignResult
 from .presets import REAL_MATERIAL_PRESETS
 
@@ -224,6 +226,62 @@ def materials() -> dict:
             }
             for p in REAL_MATERIAL_PRESETS.values()
         ]
+    }
+
+
+@app.get("/suggest_demo_params")
+def suggest_demo_params(primary_function: str, lattice_size: str, bond_length: float = 1.0) -> dict:
+    """Zwraca sensowny atom domieszki + strefe krytyczna DLA KONKRETNEJ
+    sieci/funkcji, wyliczone na PRAWDZIWEJ wygenerowanej sieci przez
+    Lattice.bulk_mask() (nie zgadywane po indeksie, nie sam warunek
+    coordination(i)==figura.coordination).
+
+    UZASADNIENIE (dwa oddzielne, po kolei znalezione bledy naiwnych
+    heurystyk): (1) "srodkowy indeks = n_atoms // 2" jest ZLA - dla
+    honeycomb_lattice(6,6) taki atom ma koordynacje 2 (brzeg), a dla
+    diamond_lattice(6,6,3) koordynacje 1 (naroznik). (2) nawet filtr
+    "coordination(i) == figura.coordination" NIE WYSTARCZA - na
+    diamond_lattice(6,6,3) daje 605/864 atomow, z czego 205 wciaz dotyka
+    PRAWDZIWEJ krawedzi (ma sasiada o niepelnej koordynacji), a pola
+    liczone z geometrii sasiedztwa (Q4/Q6, steinhardt.py) sa wtedy mocno
+    skazone efektem brzegowym niezaleznym od dopant_amplitude/sigma -
+    patrz Lattice.bulk_mask() i spatial_timdr.py BOUNDARY_SENSITIVE_FIELDS
+    po pelne uzasadnienie i zmierzone liczby. Ten endpoint uzywa wiec
+    bulk_mask() (self I wszyscy sasiedzi w pelnej koordynacji), tej samej
+    funkcji, ktorej teraz uzywa SpatialTIMDR wewnetrznie."""
+    try:
+        figure = suggest_figure(primary_function)
+        size = tuple(int(x) for x in lattice_size.split(","))
+        if figure.base_figure.dimensionality == "2D":
+            if len(size) != 2:
+                raise HTTPException(status_code=400, detail="Figura 2D wymaga lattice_size=n1,n2")
+            lattice = honeycomb_lattice(*size, bond_length=bond_length)
+        else:
+            if len(size) != 3:
+                raise HTTPException(status_code=400, detail="Figura 3D wymaga lattice_size=n1,n2,n3")
+            lattice = diamond_lattice(*size, bond_length=bond_length)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    bulk = np.where(lattice.bulk_mask())[0].tolist()
+    if not bulk:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Siec za mala - brak atomow 'bulk' (self i wszyscy sasiedzi w "
+                "pelnej koordynacji), zwieksz rozmiar sieci."
+            ),
+        )
+    dopant_atom = bulk[len(bulk) // 2]
+    critical_region = bulk[:4] if len(bulk) >= 4 else bulk
+
+    return {
+        "n_atoms": lattice.n_atoms,
+        "n_bulk_atoms": len(bulk),
+        "dopant_atom": dopant_atom,
+        "critical_region": critical_region,
+        "suggested_dopant_amplitude": 1.0,
+        "suggested_dopant_sigma": round(0.5 * bond_length, 6),
     }
 
 

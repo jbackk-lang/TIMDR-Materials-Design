@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from material_timdr.lattice import honeycomb_lattice
+from material_timdr.lattice import honeycomb_lattice, diamond_lattice
 from material_timdr.field import build_signal_field
 from material_timdr.spatial_timdr import anomalia, defekt, skret, rezonans, SpatialTIMDR
 
@@ -16,6 +16,57 @@ def test_anomalia_flags_injected_outlier():
     idx, z = anomalia(values, factor=3.0)
     assert 10 in idx
     assert len(idx) < 5, "anomalia nie powinna flagowac calej reszty tla"
+
+
+def test_anomalia_population_mask_excludes_masked_atoms_from_threshold_and_flags():
+    """population_mask=False atomy NIE moga wplywac na prog (mediana/MAD)
+    ani zostac zaflagowane, nawet jesli same maja ekstremalna wartosc."""
+    values = np.zeros(20)
+    values[15] = 1000.0  # atom spoza populacji, ekstremalna wartosc
+    values[3] = 5.0       # atom W populacji, umiarkowany outlier
+    mask = np.ones(20, dtype=bool)
+    mask[15] = False
+
+    idx, z = anomalia(values, factor=3.0, population_mask=mask)
+    assert 15 not in idx, "atom spoza populacji nie moze zostac zaflagowany"
+    assert np.isnan(z[15]), "atom spoza populacji dostaje z=NaN, nie liczbe"
+    # prog liczony TYLKO z populacji (bez 1000.0) - atom 3 powinien wypasc
+    # jako outlier wzgledem reszty populacji (wszystkie zera poza nim)
+    assert 3 in idx
+
+
+def test_defekt_population_mask_skips_edges_touching_masked_atoms():
+    hc = honeycomb_lattice(4, 4, bond_length=1.0)
+    values = np.zeros(hc.n_atoms)
+    boundary_atom = 0
+    values[boundary_atom] = 1000.0  # atom "brzegowy" z ekstremalna wartoscia
+    mask = np.ones(hc.n_atoms, dtype=bool)
+    mask[boundary_atom] = False
+
+    idx, edge_diffs = defekt(values, hc, population_mask=mask)
+    assert boundary_atom not in idx
+    # zadna krawedz dotykajaca boundary_atom nie powinna trafic do edge_diffs
+    for (i, j) in edge_diffs:
+        assert i != boundary_atom and j != boundary_atom
+
+
+def test_diamond_ideal_lattice_q4_q6_have_zero_false_flags_after_boundary_fix():
+    """Regresja na dokladnie ten bug: na idealnej (bez dopant/defect) sieci
+    diamentowej, anomalia(q4)/defekt(q4) flagowaly atomy WYLACZNIE z powodu
+    obciecia sasiedztwa na prawdziwej krawedzi skonczonej sieci (28 i 464
+    atomow odpowiednio na diamond_lattice(6,6,3)) - po ograniczeniu
+    populacji do Lattice.bulk_mask() w SpatialTIMDR.analyze() powinno to
+    byc DOKLADNIE zero, nie 'mniej'."""
+    dia = diamond_lattice(6, 6, 3, bond_length=1.54)
+    field = build_signal_field(dia, seed=1)  # bez dopant_atoms/defect_atoms
+    engine = SpatialTIMDR()
+    result = engine.analyze(field)
+
+    assert len(result["anomaly_idx"]["q4"]) == 0
+    assert len(result["anomaly_idx"]["q6"]) == 0
+    assert len(result["defekt_idx"]["q4"]) == 0
+    assert len(result["defekt_idx"]["q6"]) == 0
+    assert len(result["rezonans_idx"]) == 0
 
 
 def test_anomalia_empty_input():
