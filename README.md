@@ -28,7 +28,7 @@ więc jest wywoływany osobno — pełny przykład obu razem:
 
 ```bash
 pip install -r requirements.txt
-pytest -v                                  # 134 testów
+pytest -v                                  # 143 testy
 PYTHONPATH=. python examples/demo_graphene_dopant.py
 ```
 
@@ -92,6 +92,20 @@ rzeczywistą długość wiązania i zobaczyć sieć w prawdziwej skali
 | Diament | C-C | 1.54 | sp3 / diamentowa (3D) |
 | Krzem | Si-Si | 2.35 | sp3 / diamentowa (3D) |
 | German | Ge-Ge | 2.45 | sp3 / diamentowa (3D) |
+| Silicen | Si-Si | 2.23* | sp2 / honeycomb (2D) |
+| Germanen | Ge-Ge | 2.29* | sp2 / honeycomb (2D) |
+| Cyna szara α-Sn | Sn-Sn | 2.81 | sp3 / diamentowa (3D) |
+| Węglik krzemu 3C-SiC | Si-C | 1.89 | sp3 / diamentowa (3D, zinc-blende) |
+
+\* Silicen i germanen są w rzeczywistości lekko pofalowane (buckled), nie
+płaskie jak grafen — ten model liczy tylko płaską sieć honeycomb, więc te
+dwie długości wiązania są DOBRANE tak, by odtworzyć znaną płaską stałą
+sieciową a, nie literaturową (buckled) odległość Si-Si/Ge-Ge w 3D (patrz
+`presets.py` dla pełnego wyjaśnienia i liczb). "Silikony" (polimery
+Si-O-Si typu PDMS/kauczuk silikonowy) NIE są tu uwzględnione — to materiały
+amorficzne bez regularnej sieci krystalicznej, więc nie dają się uczciwie
+opisać żadną z dwóch geometrii (honeycomb/diamentowa), jakie ten pipeline
+obsługuje.
 
 **Dlaczego wynik często wychodzi FAIL/INCOMPLETE, i jak dostać PASS:**
 Krok 8 ma 4 kryteria - dwa z nich ("defekt"/"skręt nie naruszają strefy
@@ -298,7 +312,7 @@ material_timdr/
     api.py               — REST API (FastAPI) nad pipeline.design_material()
     presets.py            — przykłady prawdziwych materiałów (grafen, h-BN, diament, krzem, german) do UI/API
     static/index.html     — wizualny UI serwowany pod GET / (formularz + SVG sieci + lista przykładów)
-tests/                    — 134 testy pytest (w tym test_real_materials.py: grafen, h-BN, diament, krzem, german; test_api.py: warstwa HTTP + UI + presety + osiągalność PASS + limit rozmiaru sieci; test_lattice.py/test_spatial_timdr.py: Lattice.bulk_mask() i poprawka warunku brzegowego Q4/Q6)
+tests/                    — 143 testy pytest (w tym test_real_materials.py: grafen, h-BN, diament, krzem, german, silicen, germanen, α-Sn, SiC; test_api.py: warstwa HTTP + UI + presety + osiągalność PASS + limit rozmiaru sieci; test_lattice.py/test_spatial_timdr.py: Lattice.bulk_mask() i poprawka warunku brzegowego Q4/Q6)
 examples/
     demo_graphene_dopant.py — pełny przebieg 8 kroków na jednym przykładzie
 run.bat                    — Windows: uruchamia API lokalnie (patrz sekcja "API" wyżej)
