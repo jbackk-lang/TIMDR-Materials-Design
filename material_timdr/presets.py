@@ -104,4 +104,80 @@ REAL_MATERIAL_PRESETS: dict[str, MaterialPreset] = {
             "funkcjonalny."
         ),
     ),
+    "silicene": MaterialPreset(
+        key="silicene",
+        label_pl="Silicen (Si-Si, sp2, 2D)",
+        bond_length_angstrom=2.23,
+        known_lattice_constant_angstrom=3.87,
+        dimensionality="2D",
+        suggested_primary_function="conductivity",
+        note_pl=(
+            "2D odpowiednik krzemu (jak grafen dla węgla) - ALE prawdziwy "
+            "silicen jest lekko pofalowany (buckling ~0.45 A), nie płaski "
+            "jak grafen; ten model liczy tylko płaską sieć honeycomb, więc "
+            "bond_length_angstrom dobrane tu tak, by odtworzyć znaną "
+            "PŁASKĄ stałą sieciową a (nie literaturową odległość Si-Si "
+            "3D ~2.28 A, która już zawiera efekt pofalowania i dałaby złą "
+            "stałą sieciową w tym płaskim modelu). W praktyce silicen "
+            "syntetyzowany był dotąd głównie na podłożach (np. Ag(111)), "
+            "nie jako samodzielna, swobodna warstwa."
+        ),
+    ),
+    "germanene": MaterialPreset(
+        key="germanene",
+        label_pl="Germanen (Ge-Ge, sp2, 2D)",
+        bond_length_angstrom=2.29,
+        known_lattice_constant_angstrom=3.97,
+        dimensionality="2D",
+        suggested_primary_function="conductivity",
+        note_pl=(
+            "2D odpowiednik germanu, analogicznie do silicenu wyżej - "
+            "prawdziwy germanen też jest pofalowany (buckling ~0.65 A), "
+            "ten płaski model tego nie odtwarza; bond_length_angstrom "
+            "dobrane tak, by zgadzała się znana płaska stała sieciowa a, "
+            "nie literaturowa (buckled) odległość Ge-Ge ~2.38-2.44 A. "
+            "Również syntetyzowany głównie na podłożach, nie jako "
+            "swobodna warstwa."
+        ),
+    ),
+    "alpha_tin": MaterialPreset(
+        key="alpha_tin",
+        label_pl="Cyna szara α-Sn (Sn-Sn, sp3, 3D)",
+        bond_length_angstrom=2.81,
+        known_lattice_constant_angstrom=6.489,
+        dimensionality="3D",
+        suggested_primary_function="strength",
+        note_pl=(
+            "Jedyny czysty pierwiastek metaliczny (poza C/Si/Ge) o "
+            "prawdziwej strukturze diamentowej - ale α-Sn (szara cyna) "
+            "jest w praktyce KRUCHYM półmetalem/półprzewodnikiem "
+            "zerowoprzerwowym, nie materiałem konstrukcyjnym; 'strength' "
+            "to czysto geometryczny wybór jak przy krzemie/germanie. "
+            "Ciekawostka historyczna: α-Sn jest stabilne tylko poniżej "
+            "~13.2°C - powyżej tej temperatury cyna przechodzi w "
+            "metaliczną odmianę β (biała cyna, struktura tetragonalna, "
+            "NIE diamentowa) - efekt znany jako 'zaraza cynowa' "
+            "('tin pest'), historycznie niszczący cynowe guziki/organy."
+        ),
+    ),
+    "silicon_carbide": MaterialPreset(
+        key="silicon_carbide",
+        label_pl="Węglik krzemu 3C-SiC (Si-C, sp3, 3D)",
+        bond_length_angstrom=1.89,
+        known_lattice_constant_angstrom=4.3596,
+        dimensionality="3D",
+        suggested_primary_function="strength",
+        note_pl=(
+            "Struktura blendy cynkowej (zinc-blende) - topologicznie ta "
+            "sama sieć co diament (koordynacja 4, te same kąty "
+            "tetraedryczne), tylko z dwoma różnymi pierwiastkami "
+            "naprzemiennie zamiast jednego - ten model generuje "
+            "geometrię TYLKO jednorodną (jeden 'rodzaj' atomu), więc nie "
+            "odróżnia Si od C w siatce, tylko odtwarza samą topologię "
+            "wiązań Si-C. W odróżnieniu od krzemu/germanu/cyny wyżej, "
+            "'strength' NIE jest tu czysto geometrycznym wyborem - SiC "
+            "jest naprawdę używany konstrukcyjnie (ścierniwo, pancerze, "
+            "elementy wysokotemperaturowe, twardość ~9-9.5 w skali Mohsa)."
+        ),
+    ),
 }

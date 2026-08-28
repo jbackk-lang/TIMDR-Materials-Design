@@ -43,6 +43,12 @@ HONEYCOMB_MATERIALS = {
     # nazwa: (dlugosc wiazania w angstremach, powszechnie cytowana stala sieciowa a)
     "grafen (C-C sp2)": (1.42, 2.46),
     "azotek boru h-BN (B-N)": (1.45, 2.50),
+    # silicen/germanen sa w rzeczywistosci pofalowane (buckled), nie plaskie
+    # jak grafen - bond_length ponizej to WARTOSC DOBRANA tak, by odtworzyc
+    # znana PLASKA stala sieciowa a w tym plaskim modelu (patrz presets.py),
+    # nie literaturowa (buckled) odleglosc Si-Si/Ge-Ge 3D.
+    "silicen (Si-Si, plaski model)": (2.23, 3.87),
+    "germanen (Ge-Ge, plaski model)": (2.29, 3.97),
 }
 
 # ---------------------------------------------------------------------
@@ -52,6 +58,8 @@ DIAMOND_MATERIALS = {
     "diament (C-C sp3)": (1.54, 3.567),
     "krzem (Si-Si)": (2.35, 5.431),
     "german (Ge-Ge)": (2.45, 5.658),
+    "cyna szara alfa-Sn": (2.81, 6.489),
+    "weglik krzemu 3C-SiC (Si-C)": (1.89, 4.3596),
 }
 
 

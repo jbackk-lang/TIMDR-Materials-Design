@@ -29,16 +29,31 @@ def test_root_serves_visual_ui_not_a_redirect_or_404():
     assert "/design" in r.text  # strona faktycznie woła nasz endpoint API
 
 
-def test_materials_endpoint_lists_all_five_real_presets():
+def test_materials_endpoint_lists_all_nine_real_presets():
     r = client.get("/materials")
     assert r.status_code == 200
     presets = r.json()["presets"]
     keys = {p["key"] for p in presets}
-    assert keys == {"graphene", "h_bn", "diamond", "silicon", "germanium"}
+    assert keys == {
+        "graphene", "h_bn", "diamond", "silicon", "germanium",
+        "silicene", "germanene", "alpha_tin", "silicon_carbide",
+    }
     graphene = next(p for p in presets if p["key"] == "graphene")
     assert graphene["bond_length_angstrom"] == 1.42
     assert graphene["dimensionality"] == "2D"
     assert graphene["suggested_primary_function"] == "conductivity"
+
+
+def test_materials_endpoint_new_presets_have_correct_dimensionality():
+    """Regresja specyficzna dla nowych presetow (silicen/germanen sa 2D
+    mimo skladu Si/Ge takiego samego jak krzem/german 3D - latwo pomylic
+    przy kopiowaniu; alpha-Sn i SiC sa 3D mimo ze SiC brzmi jak moglby byc
+    czyms innym)."""
+    presets = {p["key"]: p for p in client.get("/materials").json()["presets"]}
+    assert presets["silicene"]["dimensionality"] == "2D"
+    assert presets["germanene"]["dimensionality"] == "2D"
+    assert presets["alpha_tin"]["dimensionality"] == "3D"
+    assert presets["silicon_carbide"]["dimensionality"] == "3D"
 
 
 def test_root_ui_references_materials_endpoint():
