@@ -23,6 +23,7 @@ from .figures import suggest_figure, FIGURE_TABLE, SP2_PLANAR, SP3_TETRAHEDRAL, 
 from .lattice import Lattice, honeycomb_lattice, diamond_lattice
 from .field import SignalField, build_signal_field
 from .steinhardt import steinhardt_q, steinhardt_field, add_steinhardt_fields
+from .presets import MaterialPreset, REAL_MATERIAL_PRESETS
 from .spatial_timdr import SpatialTIMDR, anomalia, defekt, skret, rezonans
 from .mapping import MappingResult, map_resonance_to_function
 from .synthesis import SynthesisSuggestion, suggest_synthesis_conditions, SYNTHESIS_TABLE
@@ -36,6 +37,7 @@ __all__ = [
     "Lattice", "honeycomb_lattice", "diamond_lattice",
     "SignalField", "build_signal_field",
     "steinhardt_q", "steinhardt_field", "add_steinhardt_fields",
+    "MaterialPreset", "REAL_MATERIAL_PRESETS",
     "SpatialTIMDR", "anomalia", "defekt", "skret", "rezonans",
     "MappingResult", "map_resonance_to_function",
     "SynthesisSuggestion", "suggest_synthesis_conditions", "SYNTHESIS_TABLE",

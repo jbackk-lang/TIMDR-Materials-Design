@@ -45,13 +45,47 @@ def design_material(
     defect_strength: float = 0.3,
     dopant_atoms: list[int] | None = None,
     dopant_amplitude: float = 1.0,
+    dopant_sigma: float | None = None,
     target_region_atoms: list[int] | None = None,
     critical_region_atoms: list[int] | None = None,
     bond_length: float = 1.0,
     engine: SpatialTIMDR | None = None,
     n_permutations: int = 2000,
     seed: int | None = None,
+    widen_target_to_dopant_neighbors: bool = False,
 ) -> MaterialDesignResult:
+    """
+    widen_target_to_dopant_neighbors: gdy True I `target_region_atoms` nie
+    zostal podany jawnie I sa dopant_atoms, strefa docelowa to
+    dopant_atoms + ich BEZPOSREDNI SASIEDZI w sieci, nie sam atom
+    domieszki. Domyslnie False (bez zmiany zachowania wzgledem
+    poprzednich wersji - dawny default field.py: target_region ==
+    dopant_atoms).
+
+    dopant_sigma: przekazywane wprost do build_signal_field() (Krok 3) -
+    przedtem design_material() w ogole nie wystawialo tego parametru,
+    wiec zawsze uzywany byl domyslny sigma=2*bond_length niezaleznie od
+    tego, co ktos by chcial. Mniejsze sigma => waskszy gaussowski
+    "pagorek" domieszki => mniejsza szansa, ze anomalia (Krok 4) rozleje
+    sie poza target_region (Krok 8, kryterium 1) - to jest realny lever
+    do uzyskania PASS, nie tylko widen_target_to_dopant_neighbors.
+
+    UZASADNIENIE (ta sama lekcja co w examples/demo_graphene_dopant.py,
+    tu podniesiona do prawdziwej, testowanej opcji biblioteki zamiast
+    kodu wklejonego ręcznie w skrypcie demo): `dopant_proxy` to gladki
+    gaussowski "pagorek" (patrz field.py) - jego DYSKRETNY GRADIENT (na
+    ktorym opiera sie defekt()) jest ZEROWY dokladnie w SZCZYCIE pagorka
+    (lokalne maksimum, symetryczne roznice sie znosza) i najwiekszy na
+    "zboczach" wokol niego. Z target_region=[sam_atom_domieszki] Krok 5
+    (mapping.py) prawie zawsze dostaje p=1.0 (0% pokrycia) NIE dlatego,
+    ze pipeline jest zle skonfigurowany, tylko dlatego, ze rezonans
+    faktycznie tworzy PIERScIEN wokol szczytu, nie sam szczyt - to jest
+    uczciwa, sprawdzalna wlasciwosc geometrii gradientu (zweryfikowana
+    bezposrednio w tescie ponizej), nie blad kodu. Ta opcja NIE gwarantuje
+    PASS w Kroku 8 - kryterium 'anomalia tylko w strefie docelowej' wciaz
+    moze legalnie FAIL, jesli dopant_amplitude/sigma sa duze wzgledem
+    rozmiaru strefy (patrz [Interpretacja] w demo_graphene_dopant.py).
+    """
     # Krok 2: figura atomowa sugerowana dla tej funkcji
     figure_suggestion = suggest_figure(requirements.primary_function)
 
@@ -65,6 +99,14 @@ def design_material(
             raise ValueError("Figura 3D (sp3) wymaga lattice_size=(n1, n2, n3)")
         lattice = diamond_lattice(*lattice_size, bond_length=bond_length)
 
+    effective_target = target_region_atoms
+    if widen_target_to_dopant_neighbors and target_region_atoms is None and dopant_atoms:
+        widened: set[int] = set()
+        for d in dopant_atoms:
+            widened.add(d)
+            widened.update(lattice.neighbor_lists[d])
+        effective_target = sorted(widened)
+
     # Krok 3: pole sygnału
     field = build_signal_field(
         lattice,
@@ -72,7 +114,8 @@ def design_material(
         defect_strength=defect_strength,
         dopant_atoms=dopant_atoms,
         dopant_amplitude=dopant_amplitude,
-        target_region_atoms=target_region_atoms,
+        dopant_sigma=dopant_sigma,
+        target_region_atoms=effective_target,
         seed=seed,
     )
 
