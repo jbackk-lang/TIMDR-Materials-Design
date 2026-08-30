@@ -7,6 +7,9 @@ REM   2. Instaluje/aktualizuje zaleznosci z requirements.txt.
 REM   3. Startuje serwer API (uvicorn) na http://127.0.0.1:8000
 REM      - dokumentacja Swagger: http://127.0.0.1:8000/docs
 REM
+REM Jesli padnie .venv cd "C:\Users\twoja sciezka\TIMDR-Materials-Design" dalej
+REM polecenie z terminala: Remove-Item -Recurse -Force .venv
+REM
 REM Wymaga Pythona 3.10+ dostepnego w PATH jako "python".
 REM Zatrzymanie serwera: Ctrl+C w tym oknie.
 
