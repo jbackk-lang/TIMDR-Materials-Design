@@ -1,5 +1,9 @@
 # TIMDR-Materials-Design
 
+<!-- TIMDR HUB LINKS -->
+> **Ekosystem TIMDR:** [Knowledge Hub — dokumentacja i wyszukiwarka](https://jbackk-lang.github.io/TIMDR-AI-Knowledge-Base/) · [Panel badawczy](https://jbackk-lang.github.io/) · [GIA-TIMDR — źródła](https://github.com/jbackk-lang/GIA-TIMDR) · [Research AI — lokalne wyszukiwanie semantyczne](https://github.com/jbackk-lang/TIMDR-AI-Knowledge-Base). Publiczna wyszukiwarka Huba jest tekstowa; semantyczna wymaga lokalnego uruchomienia.
+<!-- /TIMDR HUB LINKS -->
+
 Implementacja 8-krokowej procedury projektowania materiału od zera przy
 użyciu TIMDR (anomalia/defekt/skręt/rezonans), zgodnej ze schematem
 uzgodnionym z użytkownikiem. To jest **działający moduł kodu**, nie tylko
